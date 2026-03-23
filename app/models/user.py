@@ -45,6 +45,9 @@ class User(Base):
     )
     total_xp: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     level: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    current_division: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, server_default="bronce"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

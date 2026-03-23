@@ -1,5 +1,6 @@
 # Import all models so Alembic and SQLAlchemy can discover them
 from app.models.coach_athlete import CoachAthlete, CoachAthleteStatus
+from app.models.division import Division, LeagueMembership, LeagueSeason
 from app.models.exercise import Exercise, ExerciseType
 from app.models.plan import (
     BlockExercise,
@@ -40,4 +41,7 @@ __all__ = [
     "CoachAthleteStatus",
     "XPTransaction",
     "XPReason",
+    "Division",
+    "LeagueSeason",
+    "LeagueMembership",
 ]
