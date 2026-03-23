@@ -1,7 +1,9 @@
 # Import all models so Alembic and SQLAlchemy can discover them
 from app.models.coach_athlete import CoachAthlete, CoachAthleteStatus
 from app.models.division import Division, LeagueMembership, LeagueSeason
+from app.models.event import Event, EventCollaborator, EventRegistration, EventStatus, RegistrationStatus
 from app.models.exercise import Exercise, ExerciseType
+from app.models.partner_company import PartnerCompany, Product
 from app.models.plan import (
     BlockExercise,
     BlockType,
@@ -14,6 +16,13 @@ from app.models.plan import (
 from app.models.record import PersonalRecord, RecordType
 from app.models.session import SessionSet, WorkoutSession
 from app.models.template import TemplateBlock, WorkoutModality, WorkoutTemplate
+from app.models.training_center import (
+    CenterMemberRole,
+    CenterMemberStatus,
+    CenterMembership,
+    CenterPlan,
+    TrainingCenter,
+)
 from app.models.user import UnitsPreference, User, UserRole
 from app.models.xp import XPReason, XPTransaction
 
@@ -44,4 +53,16 @@ __all__ = [
     "Division",
     "LeagueSeason",
     "LeagueMembership",
+    "TrainingCenter",
+    "CenterMembership",
+    "CenterPlan",
+    "CenterMemberRole",
+    "CenterMemberStatus",
+    "PartnerCompany",
+    "Product",
+    "Event",
+    "EventCollaborator",
+    "EventRegistration",
+    "EventStatus",
+    "RegistrationStatus",
 ]
