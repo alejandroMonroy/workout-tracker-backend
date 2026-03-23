@@ -13,17 +13,39 @@ API REST para el registro y seguimiento de entrenamientos, construida con **Fast
 ### Con Docker Compose
 
 ```bash
-# Copia el archivo de variables de entorno
+# Copia el archivo de variables de entorno y configúralo
 cp .env.example .env
 
-# Levanta la base de datos y el backend
-docker compose up -d
+# Construye y levanta todos los servicios (DB + backend)
+# Las migraciones se ejecutan automáticamente al iniciar
+docker compose up -d --build
 
-# Ejecuta las migraciones
+# (Opcional) Ejecuta los seeds de ejercicios en el primer despliegue
+docker compose run --rm -e RUN_SEEDS=true backend
+
+# Ver logs del backend
+docker compose logs -f backend
+```
+
+Para ejecutar los seeds automáticamente en cada inicio, agrega `RUN_SEEDS=true` a tu `.env`.
+
+#### Comandos útiles
+
+```bash
+# Detener los servicios
+docker compose down
+
+# Detener y eliminar volúmenes (⚠️ borra datos de la DB)
+docker compose down -v
+
+# Reconstruir la imagen tras cambios en el código
+docker compose up -d --build
+
+# Ejecutar migraciones manualmente
 docker compose exec backend alembic upgrade head
 
-# Ejecuta el seed de ejercicios (opcional)
-docker compose exec backend python -m app.seeds.run
+# Crear una nueva migración
+docker compose exec backend alembic revision --autogenerate -m "descripción"
 ```
 
 La API estará disponible en `http://localhost:8000`.
