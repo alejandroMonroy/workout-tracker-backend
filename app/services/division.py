@@ -211,6 +211,40 @@ async def get_total_groups(
     return result.scalar_one() or 1
 
 
+async def bulk_enroll_all_users(db: AsyncSession) -> int:
+    """Enroll every user into the current week's season/group.
+
+    This ensures all users appear in the league standings even if they
+    haven't visited the divisions page yet.  Returns the number of
+    newly-created memberships.
+    """
+    monday, sunday = _week_bounds()
+    season = await get_or_create_season(db, monday, sunday)
+
+    # Get all user IDs
+    all_users_result = await db.execute(select(User.id))
+    all_user_ids = {row[0] for row in all_users_result.all()}
+
+    # Get IDs already enrolled this season
+    enrolled_result = await db.execute(
+        select(LeagueMembership.user_id).where(
+            LeagueMembership.season_id == season.id
+        )
+    )
+    enrolled_ids = {row[0] for row in enrolled_result.all()}
+
+    missing_ids = all_user_ids - enrolled_ids
+    if not missing_ids:
+        return 0
+
+    created = 0
+    for uid in missing_ids:
+        await get_or_create_membership(db, uid, season)
+        created += 1
+
+    return created
+
+
 # ── standings / leaderboard ──────────────────────────────────────────────────
 
 

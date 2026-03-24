@@ -271,6 +271,9 @@ async def seed_community() -> None:
                     company_id=name_to_company_id[p_data["company_name"]],
                     name=p_data["name"],
                     description=p_data.get("description"),
+                    item_type=p_data.get("item_type", "product"),
+                    xp_cost=p_data.get("xp_cost"),
+                    discount_pct=p_data.get("discount_pct"),
                     price=p_data.get("price"),
                     currency=p_data.get("currency", "EUR"),
                     external_url=p_data.get("external_url"),
@@ -308,6 +311,7 @@ async def seed_community() -> None:
                     capacity=e_data.get("capacity"),
                     status=EventStatus(e_data["status"]),
                     is_public=e_data.get("is_public", True),
+                    event_type=e_data.get("event_type", "other"),
                     center_id=(
                         name_to_center_id.get(e_data["center_name"])
                         if e_data.get("center_name")
@@ -333,6 +337,20 @@ async def seed_community() -> None:
             print(f"✅ {len(new_events)} eventos creados.")
         else:
             print("ℹ️  Eventos ya existen.")
+
+        # Update event_type for any events that still have the default "other"
+        event_type_map = {e["name"]: e.get("event_type", "other") for e in EVENTS}
+        for ename, eid in name_to_event_id.items():
+            desired_type = event_type_map.get(ename, "other")
+            if desired_type != "other":
+                await session.execute(
+                    select(Event).where(Event.id == eid)
+                )
+                ev_obj = (await session.execute(
+                    select(Event).where(Event.id == eid)
+                )).scalar_one_or_none()
+                if ev_obj and ev_obj.event_type != desired_type:
+                    ev_obj.event_type = desired_type
 
         # ── 8. Event Collaborators ───────────────────────────────────────
         result = await session.execute(

@@ -8,7 +8,6 @@ from app.core.database import Base
 
 
 class RecordType(str, enum.Enum):
-    ONE_RM = "1rm"
     MAX_REPS = "max_reps"
     BEST_TIME = "best_time"
     MAX_DISTANCE = "max_distance"

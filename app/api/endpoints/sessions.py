@@ -317,38 +317,6 @@ async def _detect_personal_records(
     new_records: list[PersonalRecord] = []
 
     for s in session.sets:
-        # Max weight (1RM estimated via Epley formula if reps > 1)
-        if s.weight_kg and s.weight_kg > 0:
-            estimated_1rm = s.weight_kg
-            if s.reps and s.reps > 1:
-                estimated_1rm = s.weight_kg * (1 + s.reps / 30.0)
-
-            current = await db.execute(
-                select(PersonalRecord).where(
-                    PersonalRecord.user_id == user_id,
-                    PersonalRecord.exercise_id == s.exercise_id,
-                    PersonalRecord.record_type == RecordType.ONE_RM,
-                )
-            )
-            existing = current.scalar_one_or_none()
-
-            if not existing or estimated_1rm > existing.value:
-                if existing:
-                    existing.value = estimated_1rm
-                    existing.achieved_at = session.finished_at
-                    existing.session_id = session.id
-                else:
-                    pr = PersonalRecord(
-                        user_id=user_id,
-                        exercise_id=s.exercise_id,
-                        record_type=RecordType.ONE_RM,
-                        value=round(estimated_1rm, 2),
-                        achieved_at=session.finished_at,
-                        session_id=session.id,
-                    )
-                    db.add(pr)
-                    new_records.append(pr)
-
         # Max weight lifted in a single set
         if s.weight_kg and s.weight_kg > 0:
             current = await db.execute(

@@ -53,6 +53,9 @@ class PartnerCompanyListItem(BaseModel):
 class ProductCreate(BaseModel):
     name: str
     description: str | None = None
+    item_type: str = "product"
+    xp_cost: int | None = None
+    discount_pct: float | None = None
     price: float | None = None
     currency: str = "EUR"
     image_url: str | None = None
@@ -62,6 +65,9 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    item_type: str | None = None
+    xp_cost: int | None = None
+    discount_pct: float | None = None
     price: float | None = None
     currency: str | None = None
     image_url: str | None = None
@@ -75,6 +81,9 @@ class ProductResponse(BaseModel):
     company_name: str = ""
     name: str
     description: str | None = None
+    item_type: str = "product"
+    xp_cost: int | None = None
+    discount_pct: float | None = None
     price: float | None = None
     currency: str
     image_url: str | None = None

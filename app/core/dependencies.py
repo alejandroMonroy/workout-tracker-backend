@@ -40,9 +40,18 @@ async def get_current_user(
 
 
 async def require_coach(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != "coach":
+    if current_user.role not in ("coach", "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requiere rol de entrenador",
+        )
+    return current_user
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol de administrador",
         )
     return current_user

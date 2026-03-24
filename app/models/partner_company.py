@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -46,6 +46,13 @@ class Product(Base):
     )
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    item_type: Mapped[str] = mapped_column(
+        Enum("product", "discount", name="itemtype"),
+        default="product",
+        server_default="product",
+    )
+    xp_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    discount_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     price: Mapped[float | None] = mapped_column(Float, nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="EUR", server_default="EUR")
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

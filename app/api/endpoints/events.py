@@ -1,9 +1,11 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_admin
 from app.models.event import (
     Event,
     EventCollaborator,
@@ -78,7 +80,7 @@ async def _enrich_event(db: AsyncSession, event: Event, user_id: int) -> dict:
 @router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 async def create_event(
     data: EventCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     if not data.center_id and not data.company_id:
@@ -97,6 +99,9 @@ async def list_events(
     center_id: int | None = Query(None),
     company_id: int | None = Query(None),
     status_filter: EventStatus | None = Query(None, alias="status"),
+    event_type: str | None = Query(None),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -108,6 +113,12 @@ async def list_events(
         query = query.where(Event.center_id == center_id)
     if company_id:
         query = query.where(Event.company_id == company_id)
+    if event_type:
+        query = query.where(Event.event_type == event_type)
+    if date_from:
+        query = query.where(Event.event_date >= date_from)
+    if date_to:
+        query = query.where(Event.event_date <= date_to)
     if status_filter:
         query = query.where(Event.status == status_filter)
     else:
@@ -125,10 +136,12 @@ async def list_events(
                 name=ev.name,
                 description=ev.description,
                 event_date=ev.event_date,
+                end_date=ev.end_date,
                 location=ev.location,
                 capacity=ev.capacity,
                 image_url=ev.image_url,
                 status=ev.status,
+                event_type=ev.event_type,
                 center_name=enriched["center_name"],
                 company_name=enriched["company_name"],
                 registered_count=enriched["registered_count"],
@@ -157,7 +170,7 @@ async def get_event(
 async def update_event(
     event_id: int,
     data: EventUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Event).where(Event.id == event_id))
@@ -294,7 +307,7 @@ async def list_registrations(
 async def add_collaborator(
     event_id: int,
     data: AddCollaboratorRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     if not data.company_id and not data.center_id:
@@ -364,6 +377,60 @@ async def list_collaborators(
                 center_id=c.center_id,
                 center_name=center_name,
                 created_at=c.created_at,
+            )
+        )
+    return items
+
+
+# ── My Calendar (user's registered events) ──────────────────────────────────
+
+
+@router.get("/my/calendar", response_model=list[EventListItem])
+async def my_calendar(
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return events the current user is registered for, optionally filtered by date range."""
+    query = (
+        select(Event)
+        .join(
+            EventRegistration,
+            (EventRegistration.event_id == Event.id)
+            & (EventRegistration.user_id == current_user.id)
+            & (EventRegistration.status != RegistrationStatus.CANCELLED),
+        )
+        .where(Event.status != EventStatus.DRAFT)
+        .order_by(Event.event_date)
+    )
+    if date_from:
+        query = query.where(Event.event_date >= date_from)
+    if date_to:
+        query = query.where(Event.event_date <= date_to)
+
+    result = await db.execute(query)
+    events = result.scalars().all()
+
+    items = []
+    for ev in events:
+        enriched = await _enrich_event(db, ev, current_user.id)
+        items.append(
+            EventListItem(
+                id=ev.id,
+                name=ev.name,
+                description=ev.description,
+                event_date=ev.event_date,
+                end_date=ev.end_date,
+                location=ev.location,
+                capacity=ev.capacity,
+                image_url=ev.image_url,
+                status=ev.status,
+                event_type=ev.event_type,
+                center_name=enriched["center_name"],
+                company_name=enriched["company_name"],
+                registered_count=enriched["registered_count"],
+                is_registered=enriched["is_registered"],
             )
         )
     return items

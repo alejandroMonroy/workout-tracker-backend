@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_admin
 from app.models.partner_company import PartnerCompany, Product
 from app.models.user import User
 from app.schemas.partner_company import (
@@ -37,10 +37,10 @@ async def _product_count(db: AsyncSession, company_id: int) -> int:
 @router.post("", response_model=PartnerCompanyResponse, status_code=status.HTTP_201_CREATED)
 async def create_company(
     data: PartnerCompanyCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new partner company (admin only in production)."""
+    """Create a new partner company (admin only)."""
     company = PartnerCompany(**data.model_dump())
     db.add(company)
     await db.flush()
@@ -117,7 +117,7 @@ async def get_company(
 async def update_company(
     company_id: int,
     data: PartnerCompanyUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -145,7 +145,7 @@ async def update_company(
 async def create_product(
     company_id: int,
     data: ProductCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     # Verify company
@@ -224,7 +224,7 @@ async def update_product(
     company_id: int,
     product_id: int,
     data: ProductUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(

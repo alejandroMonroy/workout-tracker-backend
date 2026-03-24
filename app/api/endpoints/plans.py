@@ -81,8 +81,14 @@ async def list_plans(
             )
         )
         session_count = count_result.scalar_one()
+        # Get coach name
+        coach_result = await db.execute(
+            select(User.name).where(User.id == plan.created_by)
+        )
+        coach_name = coach_result.scalar_one_or_none()
         data = PlanListResponse.model_validate(plan)
         data.session_count = session_count
+        data.coach_name = coach_name
         response.append(data)
 
     return response
@@ -114,7 +120,13 @@ async def get_plan(
             raise HTTPException(
                 status_code=403, detail="No tienes acceso a este plan"
             )
-    return plan
+    # Add coach name
+    coach_result = await db.execute(
+        select(User.name).where(User.id == plan.created_by)
+    )
+    resp = PlanResponse.model_validate(plan)
+    resp.coach_name = coach_result.scalar_one_or_none()
+    return resp
 
 
 @router.post("", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
@@ -464,6 +476,11 @@ async def my_subscriptions(
                 )
             )
             sub_data.plan.session_count = count_result.scalar_one()  # type: ignore[union-attr]
+            # Add coach name
+            coach_result = await db.execute(
+                select(User.name).where(User.id == sub.plan.created_by)
+            )
+            sub_data.plan.coach_name = coach_result.scalar_one_or_none()  # type: ignore[union-attr]
         response.append(sub_data)
 
     return response

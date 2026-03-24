@@ -18,7 +18,13 @@ from app.schemas.record import RecordResponse
 from app.schemas.session import SessionListResponse
 from app.schemas.template import TemplateResponse
 from app.schemas.plan import PlanListResponse
-from app.schemas.coach import AssignTemplateRequest, CoachAthleteResponse, InviteAthleteRequest
+from app.schemas.coach import (
+    AssignTemplateRequest,
+    CoachAthleteResponse,
+    CoachProfileResponse,
+    CoachRequestResponse,
+    InviteAthleteRequest,
+)
 from app.schemas.user import UserResponse
 
 router = APIRouter(prefix="/coach", tags=["Coach"])
@@ -44,6 +50,182 @@ async def _verify_coach_athlete(
             detail="No tienes una relación activa con este atleta",
         )
     return rel
+
+
+# --- Coach discovery ---
+
+
+@router.get("/directory", response_model=list[CoachProfileResponse])
+async def list_coaches(
+    search: str | None = Query(None, description="Buscar por nombre"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all coaches with stats for athlete discovery."""
+    query = select(User).where(User.role == UserRole.COACH)
+    if search:
+        query = query.where(User.name.ilike(f"%{search}%"))
+    query = query.order_by(User.name).limit(limit).offset(offset)
+    result = await db.execute(query)
+    coaches = result.scalars().all()
+
+    response = []
+    for coach in coaches:
+        # Athlete count (active)
+        athlete_count_result = await db.execute(
+            select(func.count(CoachAthlete.id)).where(
+                CoachAthlete.coach_id == coach.id,
+                CoachAthlete.status == CoachAthleteStatus.ACTIVE,
+            )
+        )
+        athlete_count = athlete_count_result.scalar_one()
+
+        # Plan count (public)
+        plan_count_result = await db.execute(
+            select(func.count(Plan.id)).where(
+                Plan.created_by == coach.id,
+                Plan.is_public.is_(True),
+            )
+        )
+        plan_count = plan_count_result.scalar_one()
+
+        # Existing relationship with current user
+        rel_result = await db.execute(
+            select(CoachAthlete).where(
+                CoachAthlete.coach_id == coach.id,
+                CoachAthlete.athlete_id == current_user.id,
+            )
+        )
+        rel = rel_result.scalar_one_or_none()
+
+        response.append(
+            CoachProfileResponse(
+                id=coach.id,
+                name=coach.name,
+                email=coach.email,
+                avatar_url=coach.avatar_url,
+                athlete_count=athlete_count,
+                plan_count=plan_count,
+                relationship_status=rel.status.value if rel else None,
+                relationship_initiated_by=rel.initiated_by if rel else None,
+            )
+        )
+    return response
+
+
+@router.post("/request/{coach_id}", status_code=status.HTTP_201_CREATED)
+async def request_coach(
+    coach_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Athlete sends a coaching request to a coach."""
+    # Verify coach exists
+    result = await db.execute(
+        select(User).where(User.id == coach_id, User.role == UserRole.COACH)
+    )
+    coach = result.scalar_one_or_none()
+    if not coach:
+        raise HTTPException(status_code=404, detail="Coach no encontrado")
+    if coach.id == current_user.id:
+        raise HTTPException(status_code=400, detail="No puedes solicitar ser tu propio atleta")
+
+    # Check existing relationship
+    existing = await db.execute(
+        select(CoachAthlete).where(
+            CoachAthlete.coach_id == coach_id,
+            CoachAthlete.athlete_id == current_user.id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Ya existe una relación con este coach")
+
+    rel = CoachAthlete(
+        coach_id=coach_id,
+        athlete_id=current_user.id,
+        status=CoachAthleteStatus.PENDING,
+        initiated_by="athlete",
+    )
+    db.add(rel)
+    await db.flush()
+    return {"message": f"Solicitud enviada a {coach.name}", "status": "pending"}
+
+
+@router.get("/requests/pending", response_model=list[CoachRequestResponse])
+async def get_pending_requests(
+    current_user: User = Depends(require_coach),
+    db: AsyncSession = Depends(get_db),
+):
+    """Coach views pending athlete requests."""
+    result = await db.execute(
+        select(CoachAthlete, User)
+        .join(User, User.id == CoachAthlete.athlete_id)
+        .where(
+            CoachAthlete.coach_id == current_user.id,
+            CoachAthlete.status == CoachAthleteStatus.PENDING,
+            CoachAthlete.initiated_by == "athlete",
+        )
+        .order_by(CoachAthlete.created_at.desc())
+    )
+    rows = result.all()
+    return [
+        CoachRequestResponse(
+            id=rel.id,
+            athlete=UserResponse.model_validate(athlete),
+            created_at=rel.created_at,
+        )
+        for rel, athlete in rows
+    ]
+
+
+@router.post("/requests/{request_id}/accept")
+async def accept_athlete_request(
+    request_id: int,
+    current_user: User = Depends(require_coach),
+    db: AsyncSession = Depends(get_db),
+):
+    """Coach accepts an athlete's coaching request."""
+    result = await db.execute(
+        select(CoachAthlete).where(
+            CoachAthlete.id == request_id,
+            CoachAthlete.coach_id == current_user.id,
+            CoachAthlete.status == CoachAthleteStatus.PENDING,
+            CoachAthlete.initiated_by == "athlete",
+        )
+    )
+    rel = result.scalar_one_or_none()
+    if not rel:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    rel.status = CoachAthleteStatus.ACTIVE
+    await db.flush()
+    return {"message": "Solicitud aceptada", "status": "active"}
+
+
+@router.post("/requests/{request_id}/reject")
+async def reject_athlete_request(
+    request_id: int,
+    current_user: User = Depends(require_coach),
+    db: AsyncSession = Depends(get_db),
+):
+    """Coach rejects an athlete's coaching request."""
+    result = await db.execute(
+        select(CoachAthlete).where(
+            CoachAthlete.id == request_id,
+            CoachAthlete.coach_id == current_user.id,
+            CoachAthlete.status == CoachAthleteStatus.PENDING,
+            CoachAthlete.initiated_by == "athlete",
+        )
+    )
+    rel = result.scalar_one_or_none()
+    if not rel:
+        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
+
+    await db.delete(rel)
+    await db.flush()
+    return {"message": "Solicitud rechazada"}
 
 
 # --- Invite / manage athletes ---
@@ -78,6 +260,7 @@ async def invite_athlete(
         coach_id=current_user.id,
         athlete_id=athlete.id,
         status=CoachAthleteStatus.PENDING,
+        initiated_by="coach",
     )
     db.add(rel)
     await db.flush()
@@ -119,6 +302,7 @@ async def get_pending_invites(
         .where(
             CoachAthlete.athlete_id == current_user.id,
             CoachAthlete.status == CoachAthleteStatus.PENDING,
+            CoachAthlete.initiated_by == "coach",
         )
     )
     rows = result.all()

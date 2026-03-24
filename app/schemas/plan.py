@@ -114,6 +114,7 @@ class PlanResponse(BaseModel):
     duration_weeks: int | None = None
     is_public: bool
     created_by: int
+    coach_name: str | None = None
     created_at: datetime
     sessions: list[PlanSessionResponse] = []
 
@@ -128,6 +129,7 @@ class PlanListResponse(BaseModel):
     duration_weeks: int | None = None
     is_public: bool
     created_by: int
+    coach_name: str | None = None
     created_at: datetime
     session_count: int = 0
 

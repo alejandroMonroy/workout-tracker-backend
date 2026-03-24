@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_admin
 from app.models.plan import Plan
 from app.models.training_center import (
     CenterMemberRole,
@@ -42,22 +42,26 @@ async def _member_count(db: AsyncSession, center_id: int) -> int:
 
 
 async def _require_center_admin(
-    db: AsyncSession, center_id: int, user_id: int
+    db: AsyncSession, center_id: int, user: User
 ) -> CenterMembership:
-    """User must be center owner or admin member."""
+    """User must be center owner, admin member, or platform admin."""
+    # Platform admin always passes
+    if user.role == "admin":
+        return None
+
     center_res = await db.execute(
         select(TrainingCenter).where(TrainingCenter.id == center_id)
     )
     center = center_res.scalar_one_or_none()
     if not center:
         raise HTTPException(404, "Centro no encontrado")
-    if center.owner_id == user_id:
+    if center.owner_id == user.id:
         return None  # owner always passes
 
     mem_res = await db.execute(
         select(CenterMembership).where(
             CenterMembership.center_id == center_id,
-            CenterMembership.user_id == user_id,
+            CenterMembership.user_id == user.id,
             CenterMembership.status == CenterMemberStatus.ACTIVE,
             CenterMembership.role == CenterMemberRole.ADMIN,
         )
@@ -74,7 +78,7 @@ async def _require_center_admin(
 @router.post("", response_model=TrainingCenterResponse, status_code=status.HTTP_201_CREATED)
 async def create_center(
     data: TrainingCenterCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     center = TrainingCenter(**data.model_dump(), owner_id=current_user.id)
@@ -168,7 +172,7 @@ async def update_center(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    await _require_center_admin(db, center_id, current_user.id)
+    await _require_center_admin(db, center_id, current_user)
     result = await db.execute(
         select(TrainingCenter).where(TrainingCenter.id == center_id)
     )
@@ -282,7 +286,7 @@ async def update_membership(
     db: AsyncSession = Depends(get_db),
 ):
     """Approve, reject or change role of a member (admin only)."""
-    await _require_center_admin(db, center_id, current_user.id)
+    await _require_center_admin(db, center_id, current_user)
 
     result = await db.execute(
         select(CenterMembership).where(
@@ -356,7 +360,7 @@ async def publish_plan_to_center(
     db: AsyncSession = Depends(get_db),
 ):
     """Publish a plan to a training center (must be center admin or plan owner)."""
-    await _require_center_admin(db, center_id, current_user.id)
+    await _require_center_admin(db, center_id, current_user)
 
     plan_res = await db.execute(select(Plan).where(Plan.id == data.plan_id))
     plan = plan_res.scalar_one_or_none()

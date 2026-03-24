@@ -25,7 +25,8 @@ def xp_for_level(level: int) -> int:
     """XP required to reach a given level."""
     if level <= 1:
         return 0
-    return int(50 * (level - 1) ** 1.5)
+    exponent = 1.5 + 0.01 * level
+    return int(50 * (level - 1) ** exponent)
 
 
 def level_from_xp(total_xp: int) -> int:
@@ -39,7 +40,7 @@ def level_from_xp(total_xp: int) -> int:
 # XP award amounts
 XP_AWARDS = {
     XPReason.SESSION_COMPLETE: 50,       # Per finished session
-    XPReason.PERSONAL_RECORD: 100,       # Per new PR
+    XPReason.PERSONAL_RECORD: 25,        # Per new PR
     XPReason.STREAK_BONUS: 25,           # Per consecutive day in streak
     XPReason.FIRST_SESSION: 200,         # Very first session ever
     XPReason.EXERCISE_VARIETY: 30,       # 5+ distinct exercises in one session

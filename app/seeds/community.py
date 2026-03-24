@@ -16,6 +16,17 @@ from app.models.user import UserRole, UnitsPreference, SexType
 _PWD = hash_password("Password1!")  # shared demo password
 
 USERS: list[dict] = [
+    # ── Admin ──
+    {
+        "email": "admin@wodtek.com",
+        "name": "Admin WodTek",
+        "role": UserRole.ADMIN,
+        "sex": SexType.MALE,
+        "birth_date": date(1980, 1, 1),
+        "height_cm": 175.0,
+        "weight_kg": 75.0,
+        "units_preference": UnitsPreference.METRIC,
+    },
     # ── Coaches ──
     {
         "email": "coach.luis@demo.com",
@@ -138,6 +149,87 @@ USERS: list[dict] = [
         "weight_kg": 57.0,
         "units_preference": UnitsPreference.METRIC,
     },
+    # ── New athletes ──
+    {
+        "email": "raul.herrera@demo.com",
+        "name": "Raúl Herrera",
+        "role": UserRole.ATHLETE,
+        "sex": SexType.MALE,
+        "birth_date": date(1989, 3, 8),
+        "height_cm": 181.0,
+        "weight_kg": 86.0,
+        "units_preference": UnitsPreference.METRIC,
+    },
+    {
+        "email": "lucia.romero@demo.com",
+        "name": "Lucía Romero",
+        "role": UserRole.ATHLETE,
+        "sex": SexType.FEMALE,
+        "birth_date": date(1999, 7, 19),
+        "height_cm": 167.0,
+        "weight_kg": 59.0,
+        "units_preference": UnitsPreference.METRIC,
+    },
+    {
+        "email": "marcos.gil@demo.com",
+        "name": "Marcos Gil",
+        "role": UserRole.ATHLETE,
+        "sex": SexType.MALE,
+        "birth_date": date(1995, 11, 25),
+        "height_cm": 174.0,
+        "weight_kg": 77.0,
+        "units_preference": UnitsPreference.METRIC,
+    },
+    {
+        "email": "isabel.vega@demo.com",
+        "name": "Isabel Vega",
+        "role": UserRole.ATHLETE,
+        "sex": SexType.FEMALE,
+        "birth_date": date(2001, 4, 2),
+        "height_cm": 162.0,
+        "weight_kg": 54.0,
+        "units_preference": UnitsPreference.METRIC,
+    },
+    {
+        "email": "adrian.ramos@demo.com",
+        "name": "Adrián Ramos",
+        "role": UserRole.ATHLETE,
+        "sex": SexType.MALE,
+        "birth_date": date(1990, 8, 14),
+        "height_cm": 179.0,
+        "weight_kg": 84.0,
+        "units_preference": UnitsPreference.IMPERIAL,
+    },
+    {
+        "email": "clara.mendez@demo.com",
+        "name": "Clara Méndez",
+        "role": UserRole.ATHLETE,
+        "sex": SexType.FEMALE,
+        "birth_date": date(1997, 1, 30),
+        "height_cm": 169.0,
+        "weight_kg": 61.0,
+        "units_preference": UnitsPreference.METRIC,
+    },
+    {
+        "email": "fernando.ortiz@demo.com",
+        "name": "Fernando Ortiz",
+        "role": UserRole.ATHLETE,
+        "sex": SexType.MALE,
+        "birth_date": date(1993, 6, 11),
+        "height_cm": 188.0,
+        "weight_kg": 95.0,
+        "units_preference": UnitsPreference.METRIC,
+    },
+    {
+        "email": "natalia.blanco@demo.com",
+        "name": "Natalia Blanco",
+        "role": UserRole.ATHLETE,
+        "sex": SexType.FEMALE,
+        "birth_date": date(2000, 9, 22),
+        "height_cm": 164.0,
+        "weight_kg": 56.0,
+        "units_preference": UnitsPreference.METRIC,
+    },
 ]
 
 
@@ -147,18 +239,26 @@ USERS: list[dict] = [
 # ──────────────────────────────────────────────────────────────────────────────
 
 COACH_ATHLETE_PAIRS: list[tuple[str, str]] = [
-    # Luis coaches 4 athletes
+    # Luis coaches 6 athletes
     ("coach.luis@demo.com", "ana.lopez@demo.com"),
     ("coach.luis@demo.com", "carlos.ruiz@demo.com"),
     ("coach.luis@demo.com", "sofia.torres@demo.com"),
     ("coach.luis@demo.com", "david.moreno@demo.com"),
-    # Marta coaches 3 athletes
+    ("coach.luis@demo.com", "raul.herrera@demo.com"),
+    ("coach.luis@demo.com", "fernando.ortiz@demo.com"),
+    # Marta coaches 5 athletes
     ("coach.marta@demo.com", "laura.jimenez@demo.com"),
     ("coach.marta@demo.com", "pablo.sanchez@demo.com"),
     ("coach.marta@demo.com", "elena.navarro@demo.com"),
-    # Pedro coaches 2 athletes
+    ("coach.marta@demo.com", "lucia.romero@demo.com"),
+    ("coach.marta@demo.com", "clara.mendez@demo.com"),
+    # Pedro coaches 4 athletes
     ("coach.pedro@demo.com", "jorge.diaz@demo.com"),
     ("coach.pedro@demo.com", "maria.castro@demo.com"),
+    ("coach.pedro@demo.com", "marcos.gil@demo.com"),
+    ("coach.pedro@demo.com", "isabel.vega@demo.com"),
+    ("coach.pedro@demo.com", "adrian.ramos@demo.com"),
+    ("coach.pedro@demo.com", "natalia.blanco@demo.com"),
 ]
 
 
@@ -211,6 +311,9 @@ CENTER_MEMBERSHIPS: list[tuple[str, str, str, str]] = [
     ("CrossFit Volcán", "sofia.torres@demo.com", "member", "active"),
     ("CrossFit Volcán", "david.moreno@demo.com", "member", "active"),
     ("CrossFit Volcán", "pablo.sanchez@demo.com", "member", "pending"),
+    ("CrossFit Volcán", "raul.herrera@demo.com", "member", "active"),
+    ("CrossFit Volcán", "fernando.ortiz@demo.com", "member", "active"),
+    ("CrossFit Volcán", "natalia.blanco@demo.com", "member", "pending"),
 
     # Olimpia Training Lab — Marta owns, Pedro also coaches
     ("Olimpia Training Lab", "coach.marta@demo.com", "admin", "active"),
@@ -219,12 +322,18 @@ CENTER_MEMBERSHIPS: list[tuple[str, str, str, str]] = [
     ("Olimpia Training Lab", "elena.navarro@demo.com", "member", "active"),
     ("Olimpia Training Lab", "jorge.diaz@demo.com", "member", "active"),
     ("Olimpia Training Lab", "ana.lopez@demo.com", "member", "active"),  # Ana in 2 centers
+    ("Olimpia Training Lab", "lucia.romero@demo.com", "member", "active"),
+    ("Olimpia Training Lab", "clara.mendez@demo.com", "member", "active"),
+    ("Olimpia Training Lab", "marcos.gil@demo.com", "member", "pending"),
 
     # The Garage Fitness — Pedro owns
     ("The Garage Fitness", "coach.pedro@demo.com", "admin", "active"),
     ("The Garage Fitness", "jorge.diaz@demo.com", "member", "active"),
     ("The Garage Fitness", "maria.castro@demo.com", "member", "active"),
     ("The Garage Fitness", "david.moreno@demo.com", "member", "pending"),
+    ("The Garage Fitness", "isabel.vega@demo.com", "member", "active"),
+    ("The Garage Fitness", "adrian.ramos@demo.com", "member", "active"),
+    ("The Garage Fitness", "marcos.gil@demo.com", "member", "active"),
 ]
 
 
@@ -255,96 +364,128 @@ PARTNER_COMPANIES: list[dict] = [
 
 
 PRODUCTS: list[dict] = [
-    # NutriForce products
+    # ── NutriForce — Productos canjeables con XP ──
     {
         "company_name": "NutriForce",
         "name": "Whey Protein Isolate 2 kg",
-        "description": "Proteína de suero aislada, 90 % pureza, sabor chocolate.",
-        "price": 49.99,
-        "currency": "EUR",
+        "description": "Proteína de suero aislada, 90 % pureza, sabor chocolate. Canjea tus XP por una unidad gratis.",
+        "item_type": "product",
+        "xp_cost": 1500,
         "external_url": "https://nutriforce.es/whey-isolate",
     },
     {
         "company_name": "NutriForce",
         "name": "Creatina Monohidrato 500 g",
-        "description": "Creatina micronizada, 100 servicios.",
-        "price": 24.99,
-        "currency": "EUR",
+        "description": "Creatina micronizada, 100 servicios. Consíguela gratis con tus puntos de entrenamiento.",
+        "item_type": "product",
+        "xp_cost": 800,
         "external_url": "https://nutriforce.es/creatina",
     },
     {
         "company_name": "NutriForce",
         "name": "Multivitamínico Atleta 90 caps",
         "description": "Fórmula completa con vitaminas y minerales para deportistas.",
-        "price": 18.50,
-        "currency": "EUR",
+        "item_type": "product",
+        "xp_cost": 600,
         "external_url": "https://nutriforce.es/multi",
     },
     {
         "company_name": "NutriForce",
         "name": "Pre-Workout Volcano 300 g",
         "description": "Pre-entreno con cafeína, beta-alanina y citrulina. Sabor sandía.",
-        "price": 29.99,
-        "currency": "EUR",
+        "item_type": "product",
+        "xp_cost": 1000,
         "external_url": "https://nutriforce.es/preworkout",
     },
-    # Titan Gear products
+    # ── NutriForce — Descuentos ──
+    {
+        "company_name": "NutriForce",
+        "name": "10 % dto. en tu próximo pedido NutriForce",
+        "description": "Canjea tus XP por un cupón de descuento del 10 % aplicable a cualquier pedido en nutriforce.es.",
+        "item_type": "discount",
+        "xp_cost": 300,
+        "discount_pct": 10.0,
+        "external_url": "https://nutriforce.es",
+    },
+    {
+        "company_name": "NutriForce",
+        "name": "20 % dto. en suplementación NutriForce",
+        "description": "Descuento exclusivo del 20 % para atletas con alto nivel de XP.",
+        "item_type": "discount",
+        "xp_cost": 700,
+        "discount_pct": 20.0,
+        "external_url": "https://nutriforce.es",
+    },
+    # ── Titan Gear — Productos canjeables con XP ──
     {
         "company_name": "Titan Gear",
         "name": "Rodilleras 7 mm Neopreno (par)",
         "description": "Rodilleras de competición, soporte máximo para sentadilla y cleans.",
-        "price": 39.99,
-        "currency": "EUR",
+        "item_type": "product",
+        "xp_cost": 1200,
         "external_url": "https://titangear.com/rodilleras",
-    },
-    {
-        "company_name": "Titan Gear",
-        "name": "Cinturón Lever 10 mm",
-        "description": "Cinturón de halterofilia con cierre lever, cuero genuino.",
-        "price": 89.99,
-        "currency": "EUR",
-        "external_url": "https://titangear.com/cinturon",
-    },
-    {
-        "company_name": "Titan Gear",
-        "name": "Muñequeras WOD Wrap",
-        "description": "Muñequeras de 45 cm con velcro reforzado.",
-        "price": 15.99,
-        "currency": "EUR",
-        "external_url": "https://titangear.com/wrist-wraps",
     },
     {
         "company_name": "Titan Gear",
         "name": "Calleras Grips Pro",
         "description": "Calleras de fibra de carbono para pull-ups y muscle-ups.",
-        "price": 27.50,
-        "currency": "EUR",
+        "item_type": "product",
+        "xp_cost": 900,
         "external_url": "https://titangear.com/grips",
     },
-    # WOD Snacks products
+    {
+        "company_name": "Titan Gear",
+        "name": "Muñequeras WOD Wrap",
+        "description": "Muñequeras de 45 cm con velcro reforzado.",
+        "item_type": "product",
+        "xp_cost": 500,
+        "external_url": "https://titangear.com/wrist-wraps",
+    },
+    # ── Titan Gear — Descuentos ──
+    {
+        "company_name": "Titan Gear",
+        "name": "15 % dto. en Cinturón Lever 10 mm",
+        "description": "Consigue un 15 % de descuento en el cinturón de halterofilia con cierre lever, cuero genuino.",
+        "item_type": "discount",
+        "xp_cost": 500,
+        "discount_pct": 15.0,
+        "external_url": "https://titangear.com/cinturon",
+    },
+    {
+        "company_name": "Titan Gear",
+        "name": "10 % dto. en toda la colección Titan Gear",
+        "description": "Descuento del 10 % aplicable a cualquier producto de la tienda titangear.com.",
+        "item_type": "discount",
+        "xp_cost": 400,
+        "discount_pct": 10.0,
+        "external_url": "https://titangear.com",
+    },
+    # ── WOD Snacks — Productos canjeables con XP ──
     {
         "company_name": "WOD Snacks",
         "name": "Barrita Energética Cacao & Avena (12 uds)",
         "description": "Barritas naturales con avena, cacao y miel. Sin aditivos.",
-        "price": 22.00,
-        "currency": "EUR",
+        "item_type": "product",
+        "xp_cost": 700,
         "external_url": "https://wodsnacks.es/barrita-cacao",
     },
     {
         "company_name": "WOD Snacks",
         "name": "Mix Frutos Secos Athlete 500 g",
         "description": "Mezcla de almendras, nueces, anacardos y arándanos.",
-        "price": 12.99,
-        "currency": "EUR",
+        "item_type": "product",
+        "xp_cost": 400,
         "external_url": "https://wodsnacks.es/mix-frutos",
     },
+    # ── WOD Snacks — Descuentos ──
     {
         "company_name": "WOD Snacks",
-        "name": "Gel Energético Citrus (pack 10)",
-        "description": "Geles energéticos de rápida absorción, sabor cítrico.",
-        "price": 19.99,
-        "currency": "EUR",
-        "external_url": "https://wodsnacks.es/gel-citrus",
+        "name": "Pack WOD Snacks gratis con 25 % dto.",
+        "description": "Canjea 600 XP por un 25 % de descuento en cualquier pack de WOD Snacks.",
+        "item_type": "discount",
+        "xp_cost": 600,
+        "discount_pct": 25.0,
+        "external_url": "https://wodsnacks.es",
     },
 ]
 
@@ -367,6 +508,7 @@ EVENTS: list[dict] = [
         "capacity": 60,
         "status": "published",
         "is_public": True,
+        "event_type": "competition",
         "center_name": "CrossFit Volcán",
         "company_name": None,
     },
@@ -380,6 +522,7 @@ EVENTS: list[dict] = [
         "capacity": 16,
         "status": "published",
         "is_public": False,
+        "event_type": "workshop",
         "center_name": "Olimpia Training Lab",
         "company_name": None,
     },
@@ -393,6 +536,7 @@ EVENTS: list[dict] = [
         "capacity": 40,
         "status": "published",
         "is_public": True,
+        "event_type": "open_day",
         "center_name": "The Garage Fitness",
         "company_name": None,
     },
@@ -406,6 +550,7 @@ EVENTS: list[dict] = [
         "capacity": 100,
         "status": "published",
         "is_public": True,
+        "event_type": "seminar",
         "center_name": None,
         "company_name": "NutriForce",
     },
@@ -420,6 +565,7 @@ EVENTS: list[dict] = [
         "capacity": 80,
         "status": "completed",
         "is_public": True,
+        "event_type": "competition",
         "center_name": "CrossFit Volcán",
         "company_name": None,
     },
@@ -433,8 +579,49 @@ EVENTS: list[dict] = [
         "capacity": 120,
         "status": "draft",
         "is_public": True,
+        "event_type": "competition",
         "center_name": "The Garage Fitness",
         "company_name": None,
+    },
+    # ── New events for richer calendar ──
+    {
+        "name": "Exhibición de Halterofilia Barcelona",
+        "description": "Demostración abierta de levantamientos olímpicos con atletas invitados.",
+        "event_date": _NOW + timedelta(days=5),
+        "end_date": _NOW + timedelta(days=5, hours=4),
+        "location": "Olimpia Training Lab, Av. Olímpica 15, Barcelona",
+        "capacity": 50,
+        "status": "published",
+        "is_public": True,
+        "event_type": "exhibition",
+        "center_name": "Olimpia Training Lab",
+        "company_name": None,
+    },
+    {
+        "name": "Afterwork Social — Volcán",
+        "description": "Entreno informal + cervezas post-WOD. Abierto a amigos y familia.",
+        "event_date": _NOW + timedelta(days=3),
+        "end_date": _NOW + timedelta(days=3, hours=3),
+        "location": "CrossFit Volcán, Calle de la Energía 42, Madrid",
+        "capacity": 30,
+        "status": "published",
+        "is_public": True,
+        "event_type": "social",
+        "center_name": "CrossFit Volcán",
+        "company_name": None,
+    },
+    {
+        "name": "Seminario Nutrición para Atletas",
+        "description": "Charla sobre periodización nutricional, hidratación y suplementación.",
+        "event_date": _NOW + timedelta(days=10),
+        "end_date": _NOW + timedelta(days=10, hours=2),
+        "location": "Online (Zoom)",
+        "capacity": 200,
+        "status": "published",
+        "is_public": True,
+        "event_type": "seminar",
+        "center_name": None,
+        "company_name": "NutriForce",
     },
 ]
 
@@ -467,21 +654,30 @@ EVENT_REGISTRATIONS: list[tuple[str, str]] = [
     ("WOD Solidario CrossFit Volcán", "david.moreno@demo.com"),
     ("WOD Solidario CrossFit Volcán", "coach.luis@demo.com"),
     ("WOD Solidario CrossFit Volcán", "laura.jimenez@demo.com"),
+    ("WOD Solidario CrossFit Volcán", "raul.herrera@demo.com"),
+    ("WOD Solidario CrossFit Volcán", "fernando.ortiz@demo.com"),
     # Clínica de Snatch (only center members)
     ("Clínica de Snatch — Nivel Intermedio", "laura.jimenez@demo.com"),
     ("Clínica de Snatch — Nivel Intermedio", "elena.navarro@demo.com"),
     ("Clínica de Snatch — Nivel Intermedio", "jorge.diaz@demo.com"),
     ("Clínica de Snatch — Nivel Intermedio", "ana.lopez@demo.com"),
+    ("Clínica de Snatch — Nivel Intermedio", "lucia.romero@demo.com"),
+    ("Clínica de Snatch — Nivel Intermedio", "clara.mendez@demo.com"),
     # Open Day
     ("Open Day — The Garage Fitness", "jorge.diaz@demo.com"),
     ("Open Day — The Garage Fitness", "maria.castro@demo.com"),
     ("Open Day — The Garage Fitness", "pablo.sanchez@demo.com"),
+    ("Open Day — The Garage Fitness", "isabel.vega@demo.com"),
+    ("Open Day — The Garage Fitness", "adrian.ramos@demo.com"),
+    ("Open Day — The Garage Fitness", "marcos.gil@demo.com"),
     # NutriForce Summit
     ("NutriForce Athlete Summit 2026", "coach.marta@demo.com"),
     ("NutriForce Athlete Summit 2026", "coach.luis@demo.com"),
     ("NutriForce Athlete Summit 2026", "ana.lopez@demo.com"),
     ("NutriForce Athlete Summit 2026", "carlos.ruiz@demo.com"),
     ("NutriForce Athlete Summit 2026", "elena.navarro@demo.com"),
+    ("NutriForce Athlete Summit 2026", "raul.herrera@demo.com"),
+    ("NutriForce Athlete Summit 2026", "natalia.blanco@demo.com"),
     # Throwdown (past — attended)
     ("Throwdown Interbox Madrid 2026", "ana.lopez@demo.com"),
     ("Throwdown Interbox Madrid 2026", "carlos.ruiz@demo.com"),
@@ -491,4 +687,25 @@ EVENT_REGISTRATIONS: list[tuple[str, str]] = [
     ("Throwdown Interbox Madrid 2026", "maria.castro@demo.com"),
     ("Throwdown Interbox Madrid 2026", "coach.pedro@demo.com"),
     ("Throwdown Interbox Madrid 2026", "coach.luis@demo.com"),
+    ("Throwdown Interbox Madrid 2026", "fernando.ortiz@demo.com"),
+    ("Throwdown Interbox Madrid 2026", "adrian.ramos@demo.com"),
+    ("Throwdown Interbox Madrid 2026", "marcos.gil@demo.com"),
+    ("Throwdown Interbox Madrid 2026", "isabel.vega@demo.com"),
+    # Exhibición Halterofilia
+    ("Exhibición de Halterofilia Barcelona", "ana.lopez@demo.com"),
+    ("Exhibición de Halterofilia Barcelona", "laura.jimenez@demo.com"),
+    ("Exhibición de Halterofilia Barcelona", "elena.navarro@demo.com"),
+    ("Exhibición de Halterofilia Barcelona", "coach.marta@demo.com"),
+    # Afterwork Social
+    ("Afterwork Social — Volcán", "ana.lopez@demo.com"),
+    ("Afterwork Social — Volcán", "carlos.ruiz@demo.com"),
+    ("Afterwork Social — Volcán", "sofia.torres@demo.com"),
+    ("Afterwork Social — Volcán", "coach.luis@demo.com"),
+    ("Afterwork Social — Volcán", "raul.herrera@demo.com"),
+    # Seminario Nutrición
+    ("Seminario Nutrición para Atletas", "ana.lopez@demo.com"),
+    ("Seminario Nutrición para Atletas", "carlos.ruiz@demo.com"),
+    ("Seminario Nutrición para Atletas", "david.moreno@demo.com"),
+    ("Seminario Nutrición para Atletas", "laura.jimenez@demo.com"),
+    ("Seminario Nutrición para Atletas", "elena.navarro@demo.com"),
 ]

@@ -4,10 +4,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
+from app.core.database import async_session
+from app.services.division import bulk_enroll_all_users, process_previous_season
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # On startup: process last week + enroll all users into current week
+    async with async_session() as db:
+        try:
+            await process_previous_season(db)
+            created = await bulk_enroll_all_users(db)
+            await db.commit()
+            if created:
+                print(f"🏆 Liga: {created} usuarios inscritos en la semana actual")
+        except Exception as e:
+            await db.rollback()
+            print(f"⚠️  Error al pre-inscribir liga: {e}")
     yield
 
 

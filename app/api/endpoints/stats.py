@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import case, distinct, func, select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -87,15 +87,6 @@ async def get_progress(
         select(
             WorkoutSession.started_at,
             func.max(SessionSet.weight_kg).label("max_weight"),
-            func.max(
-                case(
-                    (
-                        SessionSet.reps > 1,
-                        SessionSet.weight_kg * (1 + SessionSet.reps / 30.0),
-                    ),
-                    else_=SessionSet.weight_kg,
-                )
-            ).label("estimated_1rm"),
             func.sum(
                 func.coalesce(SessionSet.reps, 0)
                 * func.coalesce(SessionSet.weight_kg, 0)
@@ -126,7 +117,6 @@ async def get_progress(
         {
             "date": row.started_at.isoformat(),
             "max_weight": row.max_weight,
-            "estimated_1rm": round(row.estimated_1rm, 2) if row.estimated_1rm else None,
             "volume": round(row.volume, 2) if row.volume else 0,
             "max_reps": row.max_reps,
             "max_distance": row.max_distance,

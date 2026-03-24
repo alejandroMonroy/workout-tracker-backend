@@ -20,6 +20,16 @@ class RegistrationStatus(str, enum.Enum):
     ATTENDED = "attended"
 
 
+class EventType(str, enum.Enum):
+    COMPETITION = "competition"
+    WORKSHOP = "workshop"
+    EXHIBITION = "exhibition"
+    SOCIAL = "social"
+    OPEN_DAY = "open_day"
+    SEMINAR = "seminar"
+    OTHER = "other"
+
+
 class Event(Base):
     __tablename__ = "events"
 
@@ -36,6 +46,9 @@ class Event(Base):
     status: Mapped[EventStatus] = mapped_column(
         Enum(EventStatus, values_callable=lambda x: [e.value for e in x]),
         default=EventStatus.DRAFT,
+    )
+    event_type: Mapped[str] = mapped_column(
+        String(30), default="other", server_default="other"
     )
     is_public: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
