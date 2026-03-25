@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.core.database import async_session, engine, Base
 from app.models import Exercise
-from app.models.coach_athlete import CoachAthlete, CoachAthleteStatus
+from app.models.coach_subscription import CoachSubscription, CoachSubscriptionStatus
 from app.models.event import (
     Event,
     EventCollaborator,
@@ -119,9 +119,12 @@ async def seed_community() -> None:
         else:
             print("ℹ️  Todos los usuarios demo ya existen.")
 
-        # ── 2. Coach-Athlete ─────────────────────────────────────────────
+        # ── 2. Coach Subscriptions ───────────────────────────────────────
+        from datetime import timedelta, timezone
+        now = __import__("datetime").datetime.now(timezone.utc)
+
         result = await session.execute(
-            select(CoachAthlete.coach_id, CoachAthlete.athlete_id)
+            select(CoachSubscription.coach_id, CoachSubscription.athlete_id)
         )
         existing_ca: set[tuple[int, int]] = {(r[0], r[1]) for r in result.all()}
 
@@ -131,19 +134,23 @@ async def seed_community() -> None:
             aid = email_to_id.get(athlete_email)
             if cid and aid and (cid, aid) not in existing_ca:
                 session.add(
-                    CoachAthlete(
+                    CoachSubscription(
                         coach_id=cid,
                         athlete_id=aid,
-                        status=CoachAthleteStatus.ACTIVE,
+                        status=CoachSubscriptionStatus.ACTIVE,
+                        initiated_by="coach",
+                        xp_per_month=0,
+                        started_at=now,
+                        expires_at=now + timedelta(days=30),
                     )
                 )
                 new_ca += 1
 
         if new_ca:
             await session.flush()
-            print(f"✅ {new_ca} relaciones coach-atleta creadas.")
+            print(f"✅ {new_ca} suscripciones coach-atleta creadas.")
         else:
-            print("ℹ️  Relaciones coach-atleta ya existen.")
+            print("ℹ️  Suscripciones coach-atleta ya existen.")
 
         # ── 3. Training Centers ──────────────────────────────────────────
         result = await session.execute(select(TrainingCenter.name))

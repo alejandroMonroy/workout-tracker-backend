@@ -6,6 +6,8 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_admin
 from app.models.partner_company import PartnerCompany, Product
 from app.models.user import User
+from app.models.xp import XPReason
+from app.services.xp import deduct_xp
 from app.schemas.partner_company import (
     PartnerCompanyCreate,
     PartnerCompanyListItem,
@@ -217,6 +219,43 @@ async def list_all_products(
         )
         for p, coname in rows
     ]
+
+
+@router.post("/products/{product_id}/redeem", status_code=status.HTTP_200_OK)
+async def redeem_product(
+    product_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Redeem a product or discount using XP."""
+    result = await db.execute(
+        select(Product, PartnerCompany.name.label("coname"))
+        .join(PartnerCompany, Product.company_id == PartnerCompany.id)
+        .where(Product.id == product_id, Product.is_active == True)  # noqa: E712
+    )
+    row = result.one_or_none()
+    if not row:
+        raise HTTPException(404, "Producto no encontrado")
+    product, company_name = row
+
+    if not product.xp_cost:
+        raise HTTPException(400, "Este producto no tiene precio en XP")
+
+    try:
+        await deduct_xp(
+            db, current_user.id, product.xp_cost,
+            XPReason.PRODUCT_REDEMPTION,
+            f"Canje: {product.name} ({company_name})",
+        )
+    except ValueError as e:
+        raise HTTPException(402, str(e))
+
+    return {
+        "message": f"Has canjeado '{product.name}' por {product.xp_cost} XP",
+        "product_id": product_id,
+        "xp_spent": product.xp_cost,
+        "external_url": product.external_url,
+    }
 
 
 @router.put("/{company_id}/products/{product_id}", response_model=ProductResponse)

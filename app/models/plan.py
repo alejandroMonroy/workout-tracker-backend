@@ -28,10 +28,10 @@ class BlockType(str, enum.Enum):
     OTHER = "other"
 
 
-class SubscriptionStatus(str, enum.Enum):
+class PlanEnrollmentStatus(str, enum.Enum):
     ACTIVE = "active"
+    COMPLETED = "completed"
     CANCELLED = "cancelled"
-    EXPIRED = "expired"
 
 
 # ── Plan ──────────────────────────────────────────────
@@ -59,7 +59,7 @@ class Plan(Base):
         cascade="all, delete-orphan",
         order_by="PlanSession.day_number",
     )
-    subscriptions: Mapped[list["Subscription"]] = relationship(
+    enrollments: Mapped[list["PlanEnrollment"]] = relationship(
         back_populates="plan", cascade="all, delete-orphan"
     )
 
@@ -156,29 +156,35 @@ class BlockExercise(Base):
         return f"<BlockExercise block={self.block_id} order={self.order}>"
 
 
-# ── Subscription ──────────────────────────────────────
+# ── PlanEnrollment ────────────────────────────────────
 
 
-class Subscription(Base):
-    __tablename__ = "subscriptions"
+class PlanEnrollment(Base):
+    __tablename__ = "plan_enrollments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     plan_id: Mapped[int] = mapped_column(
         ForeignKey("plans.id", ondelete="CASCADE")
     )
-    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    status: Mapped[SubscriptionStatus] = mapped_column(
-        Enum(SubscriptionStatus), default=SubscriptionStatus.ACTIVE
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    coach_subscription_id: Mapped[int | None] = mapped_column(
+        ForeignKey("coach_subscriptions.id", ondelete="SET NULL"), nullable=True
     )
-    subscribed_at: Mapped[datetime] = mapped_column(
+    assigned_by_coach: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    status: Mapped[PlanEnrollmentStatus] = mapped_column(
+        Enum(PlanEnrollmentStatus), default=PlanEnrollmentStatus.ACTIVE
+    )
+    enrolled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
     # Relationships
-    plan: Mapped["Plan"] = relationship(back_populates="subscriptions")
+    plan: Mapped["Plan"] = relationship(back_populates="enrollments")
     athlete: Mapped["User"] = relationship(  # noqa: F821
-        foreign_keys=[athlete_id], back_populates="subscriptions"
+        foreign_keys=[athlete_id], back_populates="plan_enrollments"
     )
 
     def __repr__(self) -> str:
-        return f"<Subscription plan={self.plan_id} athlete={self.athlete_id}>"
+        return f"<PlanEnrollment plan={self.plan_id} athlete={self.athlete_id}>"

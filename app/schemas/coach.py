@@ -14,11 +14,14 @@ class AssignTemplateRequest(BaseModel):
     athlete_id: int
 
 
-class CoachAthleteResponse(BaseModel):
+class CoachSubscriptionResponse(BaseModel):
     id: int
     athlete_id: int
     athlete: UserResponse
     status: str
+    xp_per_month: int
+    started_at: datetime | None = None
+    expires_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -35,16 +38,18 @@ class CoachProfileResponse(BaseModel):
     avatar_url: str | None = None
     athlete_count: int = 0
     plan_count: int = 0
-    relationship_status: str | None = None  # None / "pending" / "active"
-    relationship_initiated_by: str | None = None  # "coach" / "athlete"
+    xp_per_month: int = 0
+    subscription_status: str | None = None  # None / "pending" / "active" / "expired"
+    subscription_initiated_by: str | None = None  # "coach" / "athlete"
 
     model_config = {"from_attributes": True}
 
 
 class CoachRequestResponse(BaseModel):
-    """An athlete's pending request to a coach."""
+    """An athlete's pending subscription request."""
     id: int
     athlete: UserResponse
+    xp_per_month: int
     created_at: datetime
 
     model_config = {"from_attributes": True}

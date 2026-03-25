@@ -5,25 +5,26 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_coach
+from app.models.coach_subscription import CoachSubscription, CoachSubscriptionStatus
 from app.models.exercise import Exercise
 from app.models.plan import (
     BlockExercise,
     Plan,
+    PlanEnrollment,
+    PlanEnrollmentStatus,
     PlanSession,
     SessionBlock,
-    Subscription,
-    SubscriptionStatus,
 )
 from app.models.user import User
 from app.schemas.plan import (
     PlanCreate,
+    PlanEnrollmentCreate,
+    PlanEnrollmentResponse,
     PlanListResponse,
     PlanResponse,
     PlanSessionCreate,
     PlanSessionResponse,
     PlanUpdate,
-    SubscriptionCreate,
-    SubscriptionResponse,
 )
 
 router = APIRouter(prefix="/plans", tags=["Plans"])
@@ -108,12 +109,12 @@ async def get_plan(
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
     if not plan.is_public and plan.created_by != current_user.id:
-        # Check if athlete is subscribed
+        # Check if athlete is enrolled
         sub_result = await db.execute(
-            select(Subscription).where(
-                Subscription.plan_id == plan_id,
-                Subscription.athlete_id == current_user.id,
-                Subscription.status == SubscriptionStatus.ACTIVE,
+            select(PlanEnrollment).where(
+                PlanEnrollment.plan_id == plan_id,
+                PlanEnrollment.athlete_id == current_user.id,
+                PlanEnrollment.status == PlanEnrollmentStatus.ACTIVE,
             )
         )
         if not sub_result.scalar_one_or_none():
@@ -378,22 +379,21 @@ async def delete_plan_session(
 
 
 # ══════════════════════════════════════════════════════
-#  Subscriptions
+#  Plan Enrollments
 # ══════════════════════════════════════════════════════
 
 
 @router.post(
-    "/subscribe",
-    response_model=SubscriptionResponse,
+    "/enroll",
+    response_model=PlanEnrollmentResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def subscribe_to_plan(
-    data: SubscriptionCreate,
+async def enroll_in_plan(
+    data: PlanEnrollmentCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Subscribe the current user to a plan."""
-    # Verify plan exists and is accessible
+    """Athlete self-enrolls in a public plan."""
     result = await db.execute(
         select(Plan).where(Plan.id == data.plan_id)
     )
@@ -401,108 +401,159 @@ async def subscribe_to_plan(
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
 
-    # Don't subscribe to own plans
     if plan.created_by == current_user.id:
-        raise HTTPException(
-            status_code=400,
-            detail="No puedes suscribirte a tu propio plan",
-        )
+        raise HTTPException(status_code=400, detail="No puedes inscribirte en tu propio plan")
 
-    # Check existing active subscription
+    if not plan.is_public:
+        # Allow if the athlete has an active subscription to the plan's coach
+        sub_res = await db.execute(
+            select(CoachSubscription).where(
+                CoachSubscription.coach_id == plan.created_by,
+                CoachSubscription.athlete_id == current_user.id,
+                CoachSubscription.status == CoachSubscriptionStatus.ACTIVE,
+            )
+        )
+        if not sub_res.scalar_one_or_none():
+            raise HTTPException(
+                status_code=403,
+                detail="Este plan es privado. Necesitas una suscripción activa con el coach.",
+            )
+
     existing = await db.execute(
-        select(Subscription).where(
-            Subscription.plan_id == data.plan_id,
-            Subscription.athlete_id == current_user.id,
-            Subscription.status == SubscriptionStatus.ACTIVE,
+        select(PlanEnrollment).where(
+            PlanEnrollment.plan_id == data.plan_id,
+            PlanEnrollment.athlete_id == current_user.id,
+            PlanEnrollment.status == PlanEnrollmentStatus.ACTIVE,
         )
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=409, detail="Ya estás suscrito a este plan"
-        )
+        raise HTTPException(status_code=409, detail="Ya estás inscrito en este plan")
 
-    sub = Subscription(
+    enrollment = PlanEnrollment(
         plan_id=data.plan_id,
         athlete_id=current_user.id,
-        status=SubscriptionStatus.ACTIVE,
+        assigned_by_coach=False,
+        status=PlanEnrollmentStatus.ACTIVE,
     )
-    db.add(sub)
+    db.add(enrollment)
     await db.flush()
-    await db.refresh(sub)
+    await db.refresh(enrollment)
 
-    # Reload with plan
     result = await db.execute(
-        select(Subscription)
-        .options(selectinload(Subscription.plan))
-        .where(Subscription.id == sub.id)
+        select(PlanEnrollment)
+        .options(selectinload(PlanEnrollment.plan))
+        .where(PlanEnrollment.id == enrollment.id)
     )
-    sub_obj = result.scalar_one()
-    sub_data = SubscriptionResponse.model_validate(sub_obj)
-    if sub_obj.plan:
+    enrollment_obj = result.scalar_one()
+    enrollment_data = PlanEnrollmentResponse.model_validate(enrollment_obj)
+    if enrollment_obj.plan:
         count_result = await db.execute(
             select(func.count(PlanSession.id)).where(
-                PlanSession.plan_id == sub_obj.plan.id
+                PlanSession.plan_id == enrollment_obj.plan.id
             )
         )
-        sub_data.plan.session_count = count_result.scalar_one()  # type: ignore[union-attr]
-    return sub_data
+        enrollment_data.plan.session_count = count_result.scalar_one()  # type: ignore[union-attr]
+    return enrollment_data
 
 
-@router.get("/subscriptions/mine", response_model=list[SubscriptionResponse])
-async def my_subscriptions(
+@router.get("/coach/{coach_id}/available", response_model=list[PlanListResponse])
+async def list_coach_plans_for_athlete(
+    coach_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get the current user's active subscriptions."""
-    result = await db.execute(
-        select(Subscription)
-        .options(selectinload(Subscription.plan))
-        .where(
-            Subscription.athlete_id == current_user.id,
-            Subscription.status == SubscriptionStatus.ACTIVE,
-        )
-        .order_by(Subscription.subscribed_at.desc())
-    )
-    subs = result.scalars().all()
+    """List plans from a coach available to the current athlete.
 
-    # Build response with session_count for each plan
+    Returns public plans always. Returns private plans only if athlete
+    has an active subscription to that coach.
+    """
+    # Check if athlete has active subscription to this coach
+    sub_res = await db.execute(
+        select(CoachSubscription).where(
+            CoachSubscription.coach_id == coach_id,
+            CoachSubscription.athlete_id == current_user.id,
+            CoachSubscription.status == CoachSubscriptionStatus.ACTIVE,
+        )
+    )
+    has_subscription = sub_res.scalar_one_or_none() is not None
+
+    query = select(Plan).where(Plan.created_by == coach_id)
+    if not has_subscription:
+        query = query.where(Plan.is_public.is_(True))
+    query = query.order_by(Plan.id.desc())
+
+    result = await db.execute(query)
+    plans = result.scalars().all()
+
     response = []
-    for sub in subs:
-        sub_data = SubscriptionResponse.model_validate(sub)
-        if sub.plan:
-            count_result = await db.execute(
-                select(func.count(PlanSession.id)).where(
-                    PlanSession.plan_id == sub.plan.id
-                )
-            )
-            sub_data.plan.session_count = count_result.scalar_one()  # type: ignore[union-attr]
-            # Add coach name
-            coach_result = await db.execute(
-                select(User.name).where(User.id == sub.plan.created_by)
-            )
-            sub_data.plan.coach_name = coach_result.scalar_one_or_none()  # type: ignore[union-attr]
-        response.append(sub_data)
+    for plan in plans:
+        count_result = await db.execute(
+            select(func.count(PlanSession.id)).where(PlanSession.plan_id == plan.id)
+        )
+        coach_result = await db.execute(
+            select(User.name).where(User.id == plan.created_by)
+        )
+        data = PlanListResponse.model_validate(plan)
+        data.session_count = count_result.scalar_one()
+        data.coach_name = coach_result.scalar_one_or_none()
+        response.append(data)
 
     return response
 
 
-@router.delete("/subscriptions/{sub_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def unsubscribe(
-    sub_id: int,
+@router.get("/enrollments/mine", response_model=list[PlanEnrollmentResponse])
+async def my_enrollments(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Cancel a subscription."""
+    """Get the current user's active plan enrollments."""
     result = await db.execute(
-        select(Subscription).where(
-            Subscription.id == sub_id,
-            Subscription.athlete_id == current_user.id,
+        select(PlanEnrollment)
+        .options(selectinload(PlanEnrollment.plan))
+        .where(
+            PlanEnrollment.athlete_id == current_user.id,
+            PlanEnrollment.status == PlanEnrollmentStatus.ACTIVE,
+        )
+        .order_by(PlanEnrollment.enrolled_at.desc())
+    )
+    enrollments = result.scalars().all()
+
+    response = []
+    for enrollment in enrollments:
+        enrollment_data = PlanEnrollmentResponse.model_validate(enrollment)
+        if enrollment.plan:
+            count_result = await db.execute(
+                select(func.count(PlanSession.id)).where(
+                    PlanSession.plan_id == enrollment.plan.id
+                )
+            )
+            enrollment_data.plan.session_count = count_result.scalar_one()  # type: ignore[union-attr]
+            coach_result = await db.execute(
+                select(User.name).where(User.id == enrollment.plan.created_by)
+            )
+            enrollment_data.plan.coach_name = coach_result.scalar_one_or_none()  # type: ignore[union-attr]
+        response.append(enrollment_data)
+
+    return response
+
+
+@router.delete("/enrollments/{enrollment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_enrollment(
+    enrollment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel a plan enrollment."""
+    result = await db.execute(
+        select(PlanEnrollment).where(
+            PlanEnrollment.id == enrollment_id,
+            PlanEnrollment.athlete_id == current_user.id,
         )
     )
-    sub = result.scalar_one_or_none()
-    if not sub:
-        raise HTTPException(status_code=404, detail="Suscripción no encontrada")
-    sub.status = SubscriptionStatus.CANCELLED
+    enrollment = result.scalar_one_or_none()
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Inscripción no encontrada")
+    enrollment.status = PlanEnrollmentStatus.CANCELLED
     await db.flush()
 
 
@@ -545,10 +596,10 @@ async def get_plan_session(
 
     if plan.created_by != current_user.id and not plan.is_public:
         sub = await db.execute(
-            select(Subscription).where(
-                Subscription.plan_id == plan.id,
-                Subscription.athlete_id == current_user.id,
-                Subscription.status == SubscriptionStatus.ACTIVE,
+            select(PlanEnrollment).where(
+                PlanEnrollment.plan_id == plan.id,
+                PlanEnrollment.athlete_id == current_user.id,
+                PlanEnrollment.status == PlanEnrollmentStatus.ACTIVE,
             )
         )
         if not sub.scalar_one_or_none():

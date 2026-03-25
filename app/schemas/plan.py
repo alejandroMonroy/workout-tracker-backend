@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.plan import BlockType, SubscriptionStatus
+from app.models.plan import BlockType, PlanEnrollmentStatus
 from app.models.template import WorkoutModality
 from app.schemas.exercise import ExerciseResponse
 
@@ -136,19 +136,21 @@ class PlanListResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ── Subscription ──────────────────────────────────────
+# ── PlanEnrollment ────────────────────────────────────────────
 
 
-class SubscriptionCreate(BaseModel):
+class PlanEnrollmentCreate(BaseModel):
     plan_id: int
 
 
-class SubscriptionResponse(BaseModel):
+class PlanEnrollmentResponse(BaseModel):
     id: int
     plan_id: int
     athlete_id: int
-    status: SubscriptionStatus
-    subscribed_at: datetime
+    coach_subscription_id: int | None = None
+    assigned_by_coach: bool
+    status: PlanEnrollmentStatus
+    enrolled_at: datetime
     plan: PlanListResponse | None = None
 
     model_config = {"from_attributes": True}

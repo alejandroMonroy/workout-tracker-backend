@@ -1,5 +1,5 @@
 # Import all models so Alembic and SQLAlchemy can discover them
-from app.models.coach_athlete import CoachAthlete, CoachAthleteStatus
+from app.models.coach_subscription import CoachSubscription, CoachSubscriptionStatus
 from app.models.division import Division, LeagueMembership, LeagueSeason
 from app.models.event import Event, EventCollaborator, EventRegistration, EventStatus, RegistrationStatus
 from app.models.exercise import Exercise, ExerciseType
@@ -8,19 +8,25 @@ from app.models.plan import (
     BlockExercise,
     BlockType,
     Plan,
+    PlanEnrollment,
+    PlanEnrollmentStatus,
     PlanSession,
     SessionBlock,
-    Subscription,
-    SubscriptionStatus,
 )
 from app.models.record import PersonalRecord, RecordType
 from app.models.session import SessionSet, WorkoutSession
 from app.models.template import TemplateBlock, WorkoutModality, WorkoutTemplate
 from app.models.training_center import (
+    CenterClass,
     CenterMemberRole,
     CenterMemberStatus,
     CenterMembership,
     CenterPlan,
+    CenterSubscription,
+    CenterSubscriptionStatus,
+    ClassBooking,
+    ClassBookingStatus,
+    ClassStatus,
     TrainingCenter,
 )
 from app.models.user import UnitsPreference, User, UserRole
@@ -40,14 +46,14 @@ __all__ = [
     "SessionBlock",
     "BlockExercise",
     "BlockType",
-    "Subscription",
-    "SubscriptionStatus",
+    "PlanEnrollment",
+    "PlanEnrollmentStatus",
     "WorkoutSession",
     "SessionSet",
     "PersonalRecord",
     "RecordType",
-    "CoachAthlete",
-    "CoachAthleteStatus",
+    "CoachSubscription",
+    "CoachSubscriptionStatus",
     "XPTransaction",
     "XPReason",
     "Division",
@@ -58,6 +64,12 @@ __all__ = [
     "CenterPlan",
     "CenterMemberRole",
     "CenterMemberStatus",
+    "CenterSubscription",
+    "CenterSubscriptionStatus",
+    "CenterClass",
+    "ClassStatus",
+    "ClassBooking",
+    "ClassBookingStatus",
     "PartnerCompany",
     "Product",
     "Event",

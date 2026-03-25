@@ -44,6 +44,7 @@ class User(Base):
         nullable=True,
     )
     total_xp: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    monthly_xp: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     level: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     current_division: Mapped[str | None] = mapped_column(
         String(20), nullable=True, server_default="bronce"
@@ -70,9 +71,21 @@ class User(Base):
         back_populates="creator",
         foreign_keys="[Plan.created_by]",
     )
-    subscriptions: Mapped[list["Subscription"]] = relationship(  # noqa: F821
+    plan_enrollments: Mapped[list["PlanEnrollment"]] = relationship(  # noqa: F821
         back_populates="athlete",
-        foreign_keys="[Subscription.athlete_id]",
+        foreign_keys="[PlanEnrollment.athlete_id]",
+    )
+    coach_subscriptions_as_coach: Mapped[list["CoachSubscription"]] = relationship(  # noqa: F821
+        foreign_keys="[CoachSubscription.coach_id]",
+    )
+    coach_subscriptions_as_athlete: Mapped[list["CoachSubscription"]] = relationship(  # noqa: F821
+        foreign_keys="[CoachSubscription.athlete_id]",
+    )
+    center_subscriptions: Mapped[list["CenterSubscription"]] = relationship(  # noqa: F821
+        foreign_keys="[CenterSubscription.athlete_id]",
+    )
+    class_bookings: Mapped[list["ClassBooking"]] = relationship(  # noqa: F821
+        foreign_keys="[ClassBooking.athlete_id]",
     )
     xp_transactions: Mapped[list["XPTransaction"]] = relationship(  # noqa: F821
         back_populates="user",

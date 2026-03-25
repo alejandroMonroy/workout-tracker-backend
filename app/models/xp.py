@@ -17,6 +17,10 @@ class XPReason(str, enum.Enum):
     HIGH_VOLUME = "high_volume"
     CONSISTENCY = "consistency"
     MANUAL = "manual"
+    # Spending
+    SUBSCRIPTION_PAYMENT = "subscription_payment"
+    EVENT_REGISTRATION = "event_registration"
+    PRODUCT_REDEMPTION = "product_redemption"
 
 
 # Level thresholds: XP needed to reach each level

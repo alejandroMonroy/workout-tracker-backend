@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_admin
+from app.models.xp import XPReason
+from app.services.xp import deduct_xp
 from app.models.event import (
     Event,
     EventCollaborator,
@@ -71,6 +73,7 @@ async def _enrich_event(db: AsyncSession, event: Event, user_id: int) -> dict:
         "company_name": company_name,
         "registered_count": registered_count,
         "is_registered": is_registered,
+        "xp_cost": event.xp_cost,
     }
 
 
@@ -235,6 +238,17 @@ async def register_for_event(
         )
         if not mem_res.scalar_one_or_none():
             raise HTTPException(403, "Debes ser miembro del centro para inscribirte")
+
+    # Charge XP if event has a cost
+    if event.xp_cost:
+        try:
+            await deduct_xp(
+                db, current_user.id, event.xp_cost,
+                XPReason.EVENT_REGISTRATION,
+                f"Inscripción: {event.name}",
+            )
+        except ValueError as e:
+            raise HTTPException(402, str(e))
 
     reg = EventRegistration(
         event_id=event_id,

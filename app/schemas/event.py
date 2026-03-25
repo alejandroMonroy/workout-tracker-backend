@@ -18,6 +18,7 @@ class EventCreate(BaseModel):
     image_url: str | None = None
     event_type: str = "other"
     is_public: bool = False
+    xp_cost: int | None = None
     center_id: int | None = None
     company_id: int | None = None
 
@@ -33,6 +34,7 @@ class EventUpdate(BaseModel):
     event_type: str | None = None
     status: EventStatus | None = None
     is_public: bool | None = None
+    xp_cost: int | None = None
 
 
 class EventResponse(BaseModel):
@@ -47,6 +49,7 @@ class EventResponse(BaseModel):
     status: EventStatus
     event_type: str = "other"
     is_public: bool
+    xp_cost: int | None = None
     center_id: int | None = None
     center_name: str | None = None
     company_id: int | None = None
@@ -69,6 +72,7 @@ class EventListItem(BaseModel):
     image_url: str | None = None
     status: EventStatus
     event_type: str = "other"
+    xp_cost: int | None = None
     center_name: str | None = None
     company_name: str | None = None
     registered_count: int = 0

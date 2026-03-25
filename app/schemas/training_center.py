@@ -2,7 +2,13 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.training_center import CenterMemberRole, CenterMemberStatus
+from app.models.training_center import (
+    CenterMemberRole,
+    CenterMemberStatus,
+    CenterSubscriptionStatus,
+    ClassBookingStatus,
+    ClassStatus,
+)
 
 
 # ── Training Center ──────────────────────────────────────────────────────────
@@ -42,6 +48,7 @@ class TrainingCenterResponse(BaseModel):
     logo_url: str | None = None
     owner_id: int
     is_active: bool
+    monthly_xp: int = 0
     member_count: int = 0
     created_at: datetime
 
@@ -54,6 +61,7 @@ class TrainingCenterListItem(BaseModel):
     description: str | None = None
     city: str | None = None
     logo_url: str | None = None
+    monthly_xp: int = 0
     member_count: int = 0
     is_active: bool
 
@@ -98,5 +106,71 @@ class CenterPlanResponse(BaseModel):
     plan_id: int
     plan_name: str = ""
     published_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Center Subscription ───────────────────────────────────────
+
+
+class CenterSubscriptionResponse(BaseModel):
+    id: int
+    center_id: int
+    center_name: str = ""
+    athlete_id: int
+    athlete_name: str = ""
+    status: CenterSubscriptionStatus
+    xp_per_month: int
+    started_at: datetime | None = None
+    expires_at: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SubscribeToCenterRequest(BaseModel):
+    xp_per_month: int = 0
+
+
+# ── Center Class ─────────────────────────────────────────────
+
+
+class CenterClassCreate(BaseModel):
+    name: str
+    description: str | None = None
+    scheduled_at: datetime
+    duration_min: int | None = None
+    max_capacity: int | None = None
+    template_id: int | None = None
+
+
+class CenterClassResponse(BaseModel):
+    id: int
+    center_id: int
+    coach_id: int
+    coach_name: str = ""
+    name: str
+    description: str | None = None
+    scheduled_at: datetime
+    duration_min: int | None = None
+    max_capacity: int | None = None
+    template_id: int | None = None
+    status: ClassStatus
+    booking_count: int = 0
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Class Booking ────────────────────────────────────────────
+
+
+class ClassBookingResponse(BaseModel):
+    id: int
+    class_id: int
+    athlete_id: int
+    athlete_name: str = ""
+    status: ClassBookingStatus
+    booked_at: datetime
 
     model_config = {"from_attributes": True}

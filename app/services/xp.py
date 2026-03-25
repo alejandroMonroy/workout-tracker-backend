@@ -38,6 +38,24 @@ async def award_xp(
     return tx
 
 
+async def deduct_xp(
+    db: AsyncSession,
+    user_id: int,
+    amount: int,
+    reason: XPReason,
+    description: str | None = None,
+) -> XPTransaction:
+    """Deduct XP from a user. Raises ValueError if balance is insufficient."""
+    from app.models.user import User
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one()
+    if (user.total_xp or 0) < amount:
+        raise ValueError(f"XP insuficiente: tienes {user.total_xp} XP, necesitas {amount}")
+
+    return await award_xp(db, user_id, -amount, reason, description)
+
+
 async def award_session_xp(
     db: AsyncSession,
     session: WorkoutSession,

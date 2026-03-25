@@ -53,6 +53,7 @@ class Event(Base):
     is_public: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
+    xp_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Organizer — either a center or a company (at least one)
     center_id: Mapped[int | None] = mapped_column(

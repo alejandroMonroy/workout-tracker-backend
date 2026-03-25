@@ -1,23 +1,38 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_admin
+from app.models.xp import XPReason
+from app.services.xp import deduct_xp
 from app.models.plan import Plan
 from app.models.training_center import (
+    CenterClass,
+    ClassBooking,
+    ClassBookingStatus,
+    ClassStatus,
     CenterMemberRole,
     CenterMemberStatus,
     CenterMembership,
     CenterPlan,
+    CenterSubscription,
+    CenterSubscriptionStatus,
     TrainingCenter,
 )
 from app.models.user import User
 from app.schemas.training_center import (
+    CenterClassCreate,
+    CenterClassResponse,
     CenterMembershipResponse,
     CenterPlanResponse,
+    CenterSubscriptionResponse,
+    ClassBookingResponse,
     JoinCenterRequest,
     PublishPlanRequest,
+    SubscribeToCenterRequest,
     TrainingCenterCreate,
     TrainingCenterListItem,
     TrainingCenterResponse,
@@ -138,6 +153,7 @@ async def list_centers(
             description=c.description,
             city=c.city,
             logo_url=c.logo_url,
+            monthly_xp=c.monthly_xp,
             member_count=cnt,
             is_active=c.is_active,
         )
@@ -412,3 +428,409 @@ async def list_center_plans(
         )
         for cp, pname in rows
     ]
+
+
+# ── Center Subscriptions ────────────────────────────────────────────
+
+
+@router.post("/{center_id}/subscribe", response_model=CenterSubscriptionResponse, status_code=201)
+async def subscribe_to_center(
+    center_id: int,
+    data: SubscribeToCenterRequest = SubscribeToCenterRequest(),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Athlete requests a subscription to a training center."""
+    center_res = await db.execute(
+        select(TrainingCenter).where(TrainingCenter.id == center_id, TrainingCenter.is_active == True)  # noqa: E712
+    )
+    center = center_res.scalar_one_or_none()
+    if not center:
+        raise HTTPException(404, "Centro no encontrado")
+
+    existing = await db.execute(
+        select(CenterSubscription).where(
+            CenterSubscription.center_id == center_id,
+            CenterSubscription.athlete_id == current_user.id,
+            CenterSubscription.status.in_([
+                CenterSubscriptionStatus.PENDING,
+                CenterSubscriptionStatus.ACTIVE,
+            ]),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(409, "Ya tienes una suscripción activa o pendiente con este centro")
+
+    sub = CenterSubscription(
+        center_id=center_id,
+        athlete_id=current_user.id,
+        status=CenterSubscriptionStatus.PENDING,
+        xp_per_month=center.monthly_xp,
+    )
+    db.add(sub)
+    await db.flush()
+
+    return CenterSubscriptionResponse(
+        id=sub.id,
+        center_id=center_id,
+        center_name=center.name,
+        athlete_id=current_user.id,
+        athlete_name=current_user.name,
+        status=sub.status,
+        xp_per_month=sub.xp_per_month,
+        started_at=sub.started_at,
+        expires_at=sub.expires_at,
+        created_at=sub.created_at,
+    )
+
+
+@router.get("/{center_id}/subscriptions", response_model=list[CenterSubscriptionResponse])
+async def list_center_subscriptions(
+    center_id: int,
+    sub_status: CenterSubscriptionStatus | None = Query(None, alias="status"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List subscriptions for a center (admin only)."""
+    await _require_center_admin(db, center_id, current_user)
+
+    query = (
+        select(CenterSubscription, User.name.label("uname"), TrainingCenter.name.label("cname"))
+        .join(User, CenterSubscription.athlete_id == User.id)
+        .join(TrainingCenter, CenterSubscription.center_id == TrainingCenter.id)
+        .where(CenterSubscription.center_id == center_id)
+    )
+    if sub_status:
+        query = query.where(CenterSubscription.status == sub_status)
+    query = query.order_by(CenterSubscription.created_at.desc())
+
+    result = await db.execute(query)
+    rows = result.all()
+    return [
+        CenterSubscriptionResponse(
+            id=s.id,
+            center_id=s.center_id,
+            center_name=cname,
+            athlete_id=s.athlete_id,
+            athlete_name=uname,
+            status=s.status,
+            xp_per_month=s.xp_per_month,
+            started_at=s.started_at,
+            expires_at=s.expires_at,
+            created_at=s.created_at,
+        )
+        for s, uname, cname in rows
+    ]
+
+
+@router.patch("/{center_id}/subscriptions/{sub_id}", response_model=CenterSubscriptionResponse)
+async def update_center_subscription(
+    center_id: int,
+    sub_id: int,
+    accept: bool,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Accept or reject an athlete's center subscription request (admin only)."""
+    await _require_center_admin(db, center_id, current_user)
+
+    result = await db.execute(
+        select(CenterSubscription).where(
+            CenterSubscription.id == sub_id,
+            CenterSubscription.center_id == center_id,
+            CenterSubscription.status == CenterSubscriptionStatus.PENDING,
+        )
+    )
+    sub = result.scalar_one_or_none()
+    if not sub:
+        raise HTTPException(404, "Solicitud no encontrada")
+
+    if accept:
+        # Deduct XP from the athlete before activating
+        if sub.xp_per_month > 0:
+            center_name_res = await db.execute(
+                select(TrainingCenter.name).where(TrainingCenter.id == center_id)
+            )
+            cname = center_name_res.scalar_one()
+            try:
+                await deduct_xp(
+                    db, sub.athlete_id, sub.xp_per_month,
+                    XPReason.SUBSCRIPTION_PAYMENT,
+                    f"Suscripción mensual: {cname}",
+                )
+            except ValueError as e:
+                raise HTTPException(402, str(e))
+        now = datetime.now(timezone.utc)
+        sub.status = CenterSubscriptionStatus.ACTIVE
+        sub.started_at = now
+        sub.expires_at = now + timedelta(days=30)
+    else:
+        sub.status = CenterSubscriptionStatus.CANCELLED
+    await db.flush()
+
+    user_res = await db.execute(select(User.name).where(User.id == sub.athlete_id))
+    center_res = await db.execute(select(TrainingCenter.name).where(TrainingCenter.id == center_id))
+    return CenterSubscriptionResponse(
+        id=sub.id,
+        center_id=sub.center_id,
+        center_name=center_res.scalar_one(),
+        athlete_id=sub.athlete_id,
+        athlete_name=user_res.scalar_one(),
+        status=sub.status,
+        xp_per_month=sub.xp_per_month,
+        started_at=sub.started_at,
+        expires_at=sub.expires_at,
+        created_at=sub.created_at,
+    )
+
+
+@router.get("/my/subscriptions", response_model=list[CenterSubscriptionResponse])
+async def my_center_subscriptions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all center subscriptions for the current user."""
+    result = await db.execute(
+        select(CenterSubscription, TrainingCenter.name.label("cname"))
+        .join(TrainingCenter, CenterSubscription.center_id == TrainingCenter.id)
+        .where(CenterSubscription.athlete_id == current_user.id)
+        .order_by(CenterSubscription.created_at.desc())
+    )
+    rows = result.all()
+    return [
+        CenterSubscriptionResponse(
+            id=s.id,
+            center_id=s.center_id,
+            center_name=cname,
+            athlete_id=s.athlete_id,
+            athlete_name=current_user.name,
+            status=s.status,
+            xp_per_month=s.xp_per_month,
+            started_at=s.started_at,
+            expires_at=s.expires_at,
+            created_at=s.created_at,
+        )
+        for s, cname in rows
+    ]
+
+
+# ── Center Classes ───────────────────────────────────────────────
+
+
+@router.post("/{center_id}/classes", response_model=CenterClassResponse, status_code=201)
+async def create_class(
+    center_id: int,
+    data: CenterClassCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a scheduled class (admin or coach of the center)."""
+    await _require_center_admin(db, center_id, current_user)
+
+    cls = CenterClass(
+        center_id=center_id,
+        coach_id=current_user.id,
+        name=data.name,
+        description=data.description,
+        scheduled_at=data.scheduled_at,
+        duration_min=data.duration_min,
+        max_capacity=data.max_capacity,
+        template_id=data.template_id,
+        status=ClassStatus.SCHEDULED,
+    )
+    db.add(cls)
+    await db.flush()
+
+    return CenterClassResponse(
+        id=cls.id,
+        center_id=cls.center_id,
+        coach_id=cls.coach_id,
+        coach_name=current_user.name,
+        name=cls.name,
+        description=cls.description,
+        scheduled_at=cls.scheduled_at,
+        duration_min=cls.duration_min,
+        max_capacity=cls.max_capacity,
+        template_id=cls.template_id,
+        status=cls.status,
+        booking_count=0,
+        created_at=cls.created_at,
+    )
+
+
+@router.get("/{center_id}/classes", response_model=list[CenterClassResponse])
+async def list_classes(
+    center_id: int,
+    upcoming_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List classes for a center."""
+    query = (
+        select(
+            CenterClass,
+            User.name.label("coach_name"),
+            func.count(ClassBooking.id).label("booking_count"),
+        )
+        .join(User, CenterClass.coach_id == User.id)
+        .outerjoin(
+            ClassBooking,
+            (ClassBooking.class_id == CenterClass.id)
+            & (ClassBooking.status == ClassBookingStatus.RESERVED),
+        )
+        .where(
+            CenterClass.center_id == center_id,
+            CenterClass.status == ClassStatus.SCHEDULED,
+        )
+        .group_by(CenterClass.id, User.name)
+        .order_by(CenterClass.scheduled_at)
+    )
+    if upcoming_only:
+        query = query.where(CenterClass.scheduled_at >= datetime.now(timezone.utc))
+
+    result = await db.execute(query)
+    rows = result.all()
+    return [
+        CenterClassResponse(
+            id=cls.id,
+            center_id=cls.center_id,
+            coach_id=cls.coach_id,
+            coach_name=coach_name,
+            name=cls.name,
+            description=cls.description,
+            scheduled_at=cls.scheduled_at,
+            duration_min=cls.duration_min,
+            max_capacity=cls.max_capacity,
+            template_id=cls.template_id,
+            status=cls.status,
+            booking_count=booking_count,
+            created_at=cls.created_at,
+        )
+        for cls, coach_name, booking_count in rows
+    ]
+
+
+@router.post("/{center_id}/classes/{class_id}/book", response_model=ClassBookingResponse, status_code=201)
+async def book_class(
+    center_id: int,
+    class_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Athlete books a spot in a class (requires active center subscription)."""
+    # Check active subscription
+    sub_res = await db.execute(
+        select(CenterSubscription).where(
+            CenterSubscription.center_id == center_id,
+            CenterSubscription.athlete_id == current_user.id,
+            CenterSubscription.status == CenterSubscriptionStatus.ACTIVE,
+        )
+    )
+    if not sub_res.scalar_one_or_none():
+        raise HTTPException(403, "Necesitas una suscripción activa en este centro para reservar clases")
+
+    # Check class exists and is scheduled
+    cls_res = await db.execute(
+        select(CenterClass).where(
+            CenterClass.id == class_id,
+            CenterClass.center_id == center_id,
+            CenterClass.status == ClassStatus.SCHEDULED,
+        )
+    )
+    cls = cls_res.scalar_one_or_none()
+    if not cls:
+        raise HTTPException(404, "Clase no encontrada")
+
+    # Check not already booked
+    existing = await db.execute(
+        select(ClassBooking).where(
+            ClassBooking.class_id == class_id,
+            ClassBooking.athlete_id == current_user.id,
+            ClassBooking.status == ClassBookingStatus.RESERVED,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(409, "Ya tienes una reserva en esta clase")
+
+    # Check capacity
+    if cls.max_capacity is not None:
+        count_res = await db.execute(
+            select(func.count(ClassBooking.id)).where(
+                ClassBooking.class_id == class_id,
+                ClassBooking.status == ClassBookingStatus.RESERVED,
+            )
+        )
+        if count_res.scalar_one() >= cls.max_capacity:
+            raise HTTPException(409, "La clase está completa")
+
+    booking = ClassBooking(
+        class_id=class_id,
+        athlete_id=current_user.id,
+        status=ClassBookingStatus.RESERVED,
+    )
+    db.add(booking)
+    await db.flush()
+
+    return ClassBookingResponse(
+        id=booking.id,
+        class_id=class_id,
+        athlete_id=current_user.id,
+        athlete_name=current_user.name,
+        status=booking.status,
+        booked_at=booking.booked_at,
+    )
+
+
+@router.get("/{center_id}/classes/{class_id}/bookings", response_model=list[ClassBookingResponse])
+async def list_class_bookings(
+    center_id: int,
+    class_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List bookings for a class (admin or coach)."""
+    await _require_center_admin(db, center_id, current_user)
+
+    result = await db.execute(
+        select(ClassBooking, User.name.label("uname"))
+        .join(User, ClassBooking.athlete_id == User.id)
+        .where(
+            ClassBooking.class_id == class_id,
+            ClassBooking.status == ClassBookingStatus.RESERVED,
+        )
+        .order_by(ClassBooking.booked_at)
+    )
+    rows = result.all()
+    return [
+        ClassBookingResponse(
+            id=b.id,
+            class_id=b.class_id,
+            athlete_id=b.athlete_id,
+            athlete_name=uname,
+            status=b.status,
+            booked_at=b.booked_at,
+        )
+        for b, uname in rows
+    ]
+
+
+@router.delete("/{center_id}/classes/{class_id}/book", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_booking(
+    center_id: int,
+    class_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel athlete's booking for a class."""
+    result = await db.execute(
+        select(ClassBooking).where(
+            ClassBooking.class_id == class_id,
+            ClassBooking.athlete_id == current_user.id,
+            ClassBooking.status == ClassBookingStatus.RESERVED,
+        )
+    )
+    booking = result.scalar_one_or_none()
+    if not booking:
+        raise HTTPException(404, "Reserva no encontrada")
+    booking.status = ClassBookingStatus.CANCELLED
+    await db.flush()
