@@ -84,6 +84,29 @@ async def get_current_division(
     )
 
 
+@router.get("/groups/{group_number}", response_model=list[LeagueStanding])
+async def get_group_standings_by_number(
+    group_number: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get standings for any group in the current user's division."""
+    from fastapi import HTTPException
+
+    monday, sunday = _week_bounds()
+    season = await get_or_create_season(db, monday, sunday)
+    membership = await get_or_create_membership(db, current_user.id, season)
+
+    total_groups = await get_total_groups(db, season.id, membership.division)
+    if group_number < 1 or group_number > total_groups:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+
+    raw = await get_group_standings(
+        db, season, membership.division, group_number, current_user.id
+    )
+    return [LeagueStanding(**s) for s in raw]
+
+
 @router.get("/history", response_model=list[WeekHistoryEntry])
 async def get_division_history(
     limit: int = Query(10, ge=1, le=52),

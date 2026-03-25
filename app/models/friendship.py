@@ -20,7 +20,8 @@ class Friendship(Base):
     requester_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     addressee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     status: Mapped[FriendshipStatus] = mapped_column(
-        Enum(FriendshipStatus), default=FriendshipStatus.PENDING
+        Enum(FriendshipStatus, values_callable=lambda x: [e.value for e in x]),
+        default=FriendshipStatus.PENDING,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
