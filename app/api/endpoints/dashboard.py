@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.division import DEMOTE_COUNT, DIVISION_DISPLAY, PROMOTE_COUNT, Division, division_index
-from app.models.event import Event, EventRegistration, EventStatus, RegistrationStatus
 from app.models.record import PersonalRecord
 from app.models.session import SessionSet, WorkoutSession
 from app.models.user import User
@@ -155,33 +154,7 @@ async def dashboard_summary(
         for r in session_day_rows
     ]
 
-    # ── 4. Upcoming events user is registered for ────────────────────────
-    events_q = (
-        select(Event)
-        .join(
-            EventRegistration,
-            (EventRegistration.event_id == Event.id)
-            & (EventRegistration.user_id == current_user.id)
-            & (EventRegistration.status != RegistrationStatus.CANCELLED),
-        )
-        .where(Event.event_date >= now, Event.status == EventStatus.PUBLISHED)
-        .order_by(Event.event_date)
-        .limit(5)
-    )
-    event_rows = (await db.execute(events_q)).scalars().all()
-    upcoming_events = [
-        {
-            "id": ev.id,
-            "name": ev.name,
-            "event_date": ev.event_date.isoformat(),
-            "end_date": ev.end_date.isoformat() if ev.end_date else None,
-            "location": ev.location,
-            "event_type": ev.event_type,
-        }
-        for ev in event_rows
-    ]
-
-    # ── 5. XP summary ────────────────────────────────────────────────────
+    # ── 4. XP summary ────────────────────────────────────────────────────
     total_xp = current_user.total_xp
     level = current_user.level
     xp_current = xp_for_level(level)
@@ -272,7 +245,6 @@ async def dashboard_summary(
         },
         "recent_sessions": recent_sessions,
         "session_dates": session_dates,
-        "upcoming_events": upcoming_events,
         "xp": {
             "total_xp": total_xp,
             "level": level,

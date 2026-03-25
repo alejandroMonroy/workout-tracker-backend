@@ -115,7 +115,6 @@ async def create_session(
     session = WorkoutSession(
         user_id=current_user.id,
         template_id=data.template_id,
-        plan_session_id=data.plan_session_id,
         notes=data.notes,
     )
     db.add(session)

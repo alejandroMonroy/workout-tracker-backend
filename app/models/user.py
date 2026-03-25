@@ -67,26 +67,6 @@ class User(Base):
         back_populates="created_by_user",
         foreign_keys="[WorkoutTemplate.created_by]",
     )
-    created_plans: Mapped[list["Plan"]] = relationship(  # noqa: F821
-        back_populates="creator",
-        foreign_keys="[Plan.created_by]",
-    )
-    plan_enrollments: Mapped[list["PlanEnrollment"]] = relationship(  # noqa: F821
-        back_populates="athlete",
-        foreign_keys="[PlanEnrollment.athlete_id]",
-    )
-    coach_subscriptions_as_coach: Mapped[list["CoachSubscription"]] = relationship(  # noqa: F821
-        foreign_keys="[CoachSubscription.coach_id]",
-    )
-    coach_subscriptions_as_athlete: Mapped[list["CoachSubscription"]] = relationship(  # noqa: F821
-        foreign_keys="[CoachSubscription.athlete_id]",
-    )
-    center_subscriptions: Mapped[list["CenterSubscription"]] = relationship(  # noqa: F821
-        foreign_keys="[CenterSubscription.athlete_id]",
-    )
-    class_bookings: Mapped[list["ClassBooking"]] = relationship(  # noqa: F821
-        foreign_keys="[ClassBooking.athlete_id]",
-    )
     xp_transactions: Mapped[list["XPTransaction"]] = relationship(  # noqa: F821
         back_populates="user",
         cascade="all, delete-orphan",

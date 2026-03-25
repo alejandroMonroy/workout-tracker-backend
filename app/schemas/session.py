@@ -23,7 +23,6 @@ class SessionSetCreate(BaseModel):
 
 class SessionCreate(BaseModel):
     template_id: int | None = None  # None = modo libre
-    plan_session_id: int | None = None
     notes: str | None = None
 
 
@@ -58,7 +57,6 @@ class SessionResponse(BaseModel):
     id: int
     user_id: int
     template_id: int | None = None
-    plan_session_id: int | None = None
     started_at: datetime
     finished_at: datetime | None = None
     total_duration_sec: int | None = None
@@ -74,7 +72,6 @@ class SessionListResponse(BaseModel):
     id: int
     user_id: int
     template_id: int | None = None
-    plan_session_id: int | None = None
     started_at: datetime
     finished_at: datetime | None = None
     total_duration_sec: int | None = None

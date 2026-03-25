@@ -14,9 +14,6 @@ class WorkoutSession(Base):
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("workout_templates.id"), nullable=True
     )
-    plan_session_id: Mapped[int | None] = mapped_column(
-        ForeignKey("plan_sessions.id"), nullable=True
-    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -31,7 +28,6 @@ class WorkoutSession(Base):
     # Relationships
     user: Mapped["User"] = relationship(back_populates="sessions")  # noqa: F821
     template: Mapped["WorkoutTemplate | None"] = relationship()  # noqa: F821
-    plan_session: Mapped["PlanSession | None"] = relationship()  # noqa: F821
     sets: Mapped[list["SessionSet"]] = relationship(
         back_populates="session", cascade="all, delete-orphan", order_by="SessionSet.id"
     )
