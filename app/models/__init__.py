@@ -1,6 +1,7 @@
 # Import all models so Alembic and SQLAlchemy can discover them
 from app.models.division import Division, LeagueMembership, LeagueSeason
 from app.models.exercise import Exercise, ExerciseType
+from app.models.friendship import Friendship, FriendshipStatus
 from app.models.record import PersonalRecord, RecordType
 from app.models.session import SessionSet, WorkoutSession
 from app.models.template import TemplateBlock, WorkoutModality, WorkoutTemplate
@@ -25,4 +26,6 @@ __all__ = [
     "Division",
     "LeagueSeason",
     "LeagueMembership",
+    "Friendship",
+    "FriendshipStatus",
 ]

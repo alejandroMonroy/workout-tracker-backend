@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.endpoints.athletes import router as athletes_router
 from app.api.endpoints.auth import router as auth_router
 from app.api.endpoints.dashboard import router as dashboard_router
 from app.api.endpoints.divisions import router as divisions_router
@@ -18,3 +19,4 @@ api_router.include_router(stats_router)
 api_router.include_router(xp_router)
 api_router.include_router(divisions_router)
 api_router.include_router(dashboard_router)
+api_router.include_router(athletes_router)
