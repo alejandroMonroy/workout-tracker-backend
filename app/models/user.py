@@ -11,6 +11,7 @@ class UserRole(str, enum.Enum):
     ATHLETE = "athlete"
     COACH = "coach"
     ADMIN = "admin"
+    GYM = "gym"
 
 
 class UnitsPreference(str, enum.Enum):
@@ -46,6 +47,7 @@ class User(Base):
     total_xp: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     monthly_xp: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     level: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    subscription_xp_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
     current_division: Mapped[str | None] = mapped_column(
         String(20), nullable=True, server_default="bronce"
     )

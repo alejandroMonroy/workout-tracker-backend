@@ -189,13 +189,15 @@ async def update_template(
 
     await db.flush()
 
-    # Reload with relationships
+    # Reload with relationships — populate_existing forces a fresh load
+    # from DB, bypassing any stale identity-map entries from deleted blocks.
     result = await db.execute(
         select(WorkoutTemplate)
         .options(
             selectinload(WorkoutTemplate.blocks).selectinload(TemplateBlock.exercise)
         )
         .where(WorkoutTemplate.id == template.id)
+        .execution_options(populate_existing=True)
     )
     return result.scalar_one()
 

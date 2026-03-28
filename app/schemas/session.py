@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.models.session import SessionType
 from app.schemas.exercise import ExerciseResponse
 
 
@@ -23,6 +24,7 @@ class SessionSetCreate(BaseModel):
 
 class SessionCreate(BaseModel):
     template_id: int | None = None  # None = modo libre
+    plan_workout_id: int | None = None
     notes: str | None = None
 
 
@@ -57,6 +59,9 @@ class SessionResponse(BaseModel):
     id: int
     user_id: int
     template_id: int | None = None
+    plan_workout_id: int | None = None
+    class_schedule_id: int | None = None
+    session_type: SessionType = SessionType.MANUAL
     started_at: datetime
     finished_at: datetime | None = None
     total_duration_sec: int | None = None
@@ -72,6 +77,8 @@ class SessionListResponse(BaseModel):
     id: int
     user_id: int
     template_id: int | None = None
+    class_schedule_id: int | None = None
+    session_type: SessionType = SessionType.MANUAL
     started_at: datetime
     finished_at: datetime | None = None
     total_duration_sec: int | None = None

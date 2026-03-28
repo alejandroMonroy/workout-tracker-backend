@@ -1,9 +1,15 @@
+import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, SmallInteger, String, Text, func
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, SmallInteger, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+
+class SessionType(str, enum.Enum):
+    MANUAL = "manual"
+    CLASS = "class"
 
 
 class WorkoutSession(Base):
@@ -13,6 +19,17 @@ class WorkoutSession(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("workout_templates.id"), nullable=True
+    )
+    plan_workout_id: Mapped[int | None] = mapped_column(
+        ForeignKey("plan_workouts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    class_schedule_id: Mapped[int | None] = mapped_column(
+        ForeignKey("gym_class_schedules.id", ondelete="SET NULL"), nullable=True
+    )
+    session_type: Mapped[SessionType] = mapped_column(
+        Enum(SessionType, values_callable=lambda x: [e.value for e in x], native_enum=False),
+        default=SessionType.MANUAL,
+        server_default="manual",
     )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

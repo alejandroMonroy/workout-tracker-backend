@@ -21,6 +21,9 @@ class XPReason(str, enum.Enum):
     SUBSCRIPTION_PAYMENT = "subscription_payment"
     EVENT_REGISTRATION = "event_registration"
     PRODUCT_REDEMPTION = "product_redemption"
+    # Challenges
+    CHALLENGE_WAGER = "challenge_wager"
+    CHALLENGE_WIN = "challenge_win"
 
 
 # Level thresholds: XP needed to reach each level
