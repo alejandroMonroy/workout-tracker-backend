@@ -24,6 +24,8 @@ class XPReason(str, enum.Enum):
     # Challenges
     CHALLENGE_WAGER = "challenge_wager"
     CHALLENGE_WIN = "challenge_win"
+    # Competitions
+    COMPETITION_WORKOUT = "competition_workout"
 
 
 # Level thresholds: XP needed to reach each level

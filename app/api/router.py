@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.endpoints.athletes import router as athletes_router
 from app.api.endpoints.challenges import router as challenges_router
+from app.api.endpoints.competitions import router as competitions_router
 from app.api.endpoints.auth import router as auth_router
 from app.api.endpoints.coaches import router as coaches_router
 from app.api.endpoints.dashboard import router as dashboard_router
@@ -32,3 +33,4 @@ api_router.include_router(gyms_router)
 api_router.include_router(marketplace_router)
 api_router.include_router(messages_router)
 api_router.include_router(challenges_router)
+api_router.include_router(competitions_router)

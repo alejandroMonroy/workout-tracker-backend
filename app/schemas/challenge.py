@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class ChallengeCreate(BaseModel):
     challenged_id: int
     wager_xp: int = Field(ge=1)
+    session_id: int
 
 
 class ChallengeUserSnippet(BaseModel):

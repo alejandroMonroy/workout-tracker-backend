@@ -79,6 +79,13 @@ async def create_challenge(
     if not opponent:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    # Validate session
+    session = await db.get(WorkoutSession, data.session_id)
+    if not session or session.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+    if not session.finished_at:
+        raise HTTPException(status_code=400, detail="La sesión debe estar completada para crear un desafío")
+
     if current_user.total_xp < data.wager_xp:
         raise HTTPException(status_code=400, detail="XP insuficiente para la apuesta")
 
@@ -96,6 +103,7 @@ async def create_challenge(
         challenged_id=data.challenged_id,
         wager_xp=data.wager_xp,
         status=ChallengeStatus.PENDING,
+        challenger_session_id=data.session_id,
         expires_at=datetime.now(timezone.utc) + timedelta(days=_CHALLENGE_DAYS),
     )
     db.add(challenge)
