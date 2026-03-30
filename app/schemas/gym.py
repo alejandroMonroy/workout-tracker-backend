@@ -269,6 +269,11 @@ class WeeklySlotPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CopyDaySlotsBody(BaseModel):
+    source_day: int  # 0-6
+    target_day: int  # 0-6
+
+
 # ── Gym Class Workout ──────────────────────────────────────────────────────────
 
 class GymClassWorkoutExerciseCreate(BaseModel):

@@ -62,6 +62,7 @@ from app.schemas.gym import (
     ScheduleCreate,
     SchedulePublic,
     ScheduleUpdate,
+    CopyDaySlotsBody,
     WeeklySlotCreate,
     WeeklySlotPublic,
 )
@@ -846,6 +847,56 @@ async def create_weekly_slot(
     await db.commit()
     await db.refresh(slot)
     return slot
+
+
+@router.post("/mine/weekly-slots/copy-day", response_model=list[WeeklySlotPublic], status_code=201)
+async def copy_day_slots(
+    body: CopyDaySlotsBody,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _require_gym_owner(current_user)
+    if body.source_day == body.target_day:
+        raise HTTPException(status_code=400, detail="El día origen y destino deben ser diferentes")
+    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = result.scalar_one_or_none()
+    if not gym:
+        raise HTTPException(status_code=404, detail="Crea tu gimnasio primero")
+    res = await db.execute(
+        select(GymWeeklySlot).where(
+            GymWeeklySlot.gym_id == gym.id,
+            GymWeeklySlot.day_of_week == body.source_day,
+        )
+    )
+    source_slots = res.scalars().all()
+    if not source_slots:
+        raise HTTPException(status_code=404, detail="No hay clases en el día origen")
+    # Delete existing slots on target day
+    target_res = await db.execute(
+        select(GymWeeklySlot).where(
+            GymWeeklySlot.gym_id == gym.id,
+            GymWeeklySlot.day_of_week == body.target_day,
+        )
+    )
+    for existing in target_res.scalars().all():
+        await db.delete(existing)
+    new_slots = []
+    for slot in source_slots:
+        new_slot = GymWeeklySlot(
+            gym_id=gym.id,
+            day_of_week=body.target_day,
+            start_time=slot.start_time,
+            end_time=slot.end_time,
+            name=slot.name,
+            capacity=slot.capacity,
+            cost=slot.cost,
+        )
+        db.add(new_slot)
+        new_slots.append(new_slot)
+    await db.commit()
+    for slot in new_slots:
+        await db.refresh(slot)
+    return new_slots
 
 
 @router.delete("/mine/weekly-slots/{slot_id}", status_code=204)
