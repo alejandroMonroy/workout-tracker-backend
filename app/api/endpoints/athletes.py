@@ -11,7 +11,7 @@ from app.models.exercise import Exercise
 from app.models.friendship import Friendship, FriendshipStatus
 from app.models.record import PersonalRecord
 from app.models.session import SessionSet, WorkoutSession
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.friendship import (
     AthleteProfile,
     AthletePublic,
@@ -76,7 +76,10 @@ async def search_athletes(
 ):
     fmap = await _load_friendship_map(db, current_user.id)
 
-    q = select(User).where(User.id != current_user.id)
+    q = select(User).where(
+        User.id != current_user.id,
+        User.role == UserRole.ATHLETE
+    )
     if search and search.strip():
         q = q.where(User.name.ilike(f"%{search.strip()}%"))
     q = q.order_by(User.total_xp.desc()).offset((page - 1) * limit).limit(limit)
