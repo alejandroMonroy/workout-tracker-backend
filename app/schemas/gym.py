@@ -13,7 +13,6 @@ class GymCreate(BaseModel):
     logo_url: str | None = None
     website: str | None = None
     phone: str | None = None
-    cancellation_hours: int = 2
     free_trial_enabled: bool = True
 
 
@@ -23,7 +22,6 @@ class GymUpdate(BaseModel):
     logo_url: str | None = None
     website: str | None = None
     phone: str | None = None
-    cancellation_hours: int | None = None
     free_trial_enabled: bool | None = None
 
 
@@ -35,7 +33,6 @@ class GymPublic(BaseModel):
     logo_url: str | None
     website: str | None
     phone: str | None
-    cancellation_hours: int
     free_trial_enabled: bool
     created_at: datetime
 
@@ -49,6 +46,7 @@ class LocationCreate(BaseModel):
     address: str | None = None
     city: str | None = None
     capacity: int = 20
+    cancellation_hours: int = 2
 
 
 class LocationUpdate(BaseModel):
@@ -56,6 +54,7 @@ class LocationUpdate(BaseModel):
     address: str | None = None
     city: str | None = None
     capacity: int | None = None
+    cancellation_hours: int | None = None
     is_active: bool | None = None
 
 
@@ -66,6 +65,7 @@ class LocationPublic(BaseModel):
     address: str | None
     city: str | None
     capacity: int
+    cancellation_hours: int
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -91,7 +91,7 @@ class PlanUpdate(BaseModel):
 
 class PlanPublic(BaseModel):
     id: int
-    gym_id: int
+    location_id: int
     name: str
     plan_type: PlanType
     xp_price: int
@@ -168,7 +168,7 @@ class ClassTemplateUpdate(BaseModel):
 
 class ClassTemplatePublic(BaseModel):
     id: int
-    gym_id: int
+    location_id: int
     name: str
     description: str | None
     duration_minutes: int

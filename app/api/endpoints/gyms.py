@@ -47,7 +47,6 @@ from app.schemas.gym import (
     GymClassWorkoutExercisePublic,
     GymClassWorkoutPublic,
     GymClassWorkoutUpdate,
-    GymCreate,
     GymPublic,
     GymUpdate,
     LocationCreate,
@@ -77,6 +76,16 @@ router = APIRouter(prefix="/gyms", tags=["Gyms"])
 def _require_gym_owner(current_user: User) -> None:
     if current_user.role != UserRole.GYM:
         raise HTTPException(status_code=403, detail="Solo gimnasios pueden acceder a esta función")
+
+
+async def _get_location_of_gym(db: AsyncSession, loc_id: int, gym_id: int) -> GymLocation:
+    res = await db.execute(
+        select(GymLocation).where(GymLocation.id == loc_id, GymLocation.gym_id == gym_id)
+    )
+    loc = res.scalar_one_or_none()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Sede no encontrada")
+    return loc
 
 
 async def _get_gym_or_404(db: AsyncSession, gym_id: int, owner_id: int | None = None) -> Gym:
@@ -241,22 +250,6 @@ async def list_gyms(
 
 # ─── Gym owner: my gym ────────────────────────────────────────────────────────
 
-@router.post("/mine", response_model=GymPublic, status_code=201)
-async def create_gym(
-    body: GymCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    _require_gym_owner(current_user)
-    existing = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Ya tienes un gimnasio registrado")
-    gym = Gym(owner_id=current_user.id, **body.model_dump())
-    db.add(gym)
-    await db.commit()
-    await db.refresh(gym)
-    return gym
-
 
 @router.get("/mine", response_model=GymPublic)
 async def get_my_gym(
@@ -348,58 +341,64 @@ async def update_location(
     return loc
 
 
-# ─── Gym owner: plans ─────────────────────────────────────────────────────────
+# ─── Gym owner: location-scoped plans ────────────────────────────────────────
 
-@router.post("/mine/plans", response_model=PlanPublic, status_code=201)
+@router.post("/mine/locations/{loc_id}/plans", response_model=PlanPublic, status_code=201)
 async def create_plan(
+    loc_id: int,
     body: PlanCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
-        raise HTTPException(status_code=404, detail="Crea tu gimnasio primero")
-    plan = GymSubscriptionPlan(gym_id=gym.id, **body.model_dump())
+        raise HTTPException(status_code=404, detail="Gimnasio no encontrado")
+    loc = await _get_location_of_gym(db, loc_id, gym.id)
+    plan = GymSubscriptionPlan(location_id=loc.id, **body.model_dump())
     db.add(plan)
     await db.commit()
     await db.refresh(plan)
     return plan
 
 
-@router.get("/mine/plans", response_model=list[PlanPublic])
-async def list_my_plans(
+@router.get("/mine/locations/{loc_id}/plans", response_model=list[PlanPublic])
+async def list_location_plans(
+    loc_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
         return []
+    await _get_location_of_gym(db, loc_id, gym.id)
     res = await db.execute(
-        select(GymSubscriptionPlan).where(GymSubscriptionPlan.gym_id == gym.id)
+        select(GymSubscriptionPlan).where(GymSubscriptionPlan.location_id == loc_id)
     )
     return res.scalars().all()
 
 
-@router.patch("/mine/plans/{plan_id}", response_model=PlanPublic)
+@router.patch("/mine/locations/{loc_id}/plans/{plan_id}", response_model=PlanPublic)
 async def update_plan(
+    loc_id: int,
     plan_id: int,
     body: PlanUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
         raise HTTPException(status_code=404, detail="Gimnasio no encontrado")
+    await _get_location_of_gym(db, loc_id, gym.id)
     res = await db.execute(
         select(GymSubscriptionPlan).where(
             GymSubscriptionPlan.id == plan_id,
-            GymSubscriptionPlan.gym_id == gym.id,
+            GymSubscriptionPlan.location_id == loc_id,
         )
     )
     plan = res.scalar_one_or_none()
@@ -412,58 +411,64 @@ async def update_plan(
     return plan
 
 
-# ─── Gym owner: class templates ───────────────────────────────────────────────
+# ─── Gym owner: location-scoped templates ────────────────────────────────────
 
-@router.post("/mine/templates", response_model=ClassTemplatePublic, status_code=201)
+@router.post("/mine/locations/{loc_id}/templates", response_model=ClassTemplatePublic, status_code=201)
 async def create_template(
+    loc_id: int,
     body: ClassTemplateCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
-        raise HTTPException(status_code=404, detail="Crea tu gimnasio primero")
-    tmpl = GymClassTemplate(gym_id=gym.id, **body.model_dump())
+        raise HTTPException(status_code=404, detail="Gimnasio no encontrado")
+    loc = await _get_location_of_gym(db, loc_id, gym.id)
+    tmpl = GymClassTemplate(location_id=loc.id, **body.model_dump())
     db.add(tmpl)
     await db.commit()
     await db.refresh(tmpl)
     return tmpl
 
 
-@router.get("/mine/templates", response_model=list[ClassTemplatePublic])
-async def list_my_templates(
+@router.get("/mine/locations/{loc_id}/templates", response_model=list[ClassTemplatePublic])
+async def list_location_templates(
+    loc_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
         return []
+    await _get_location_of_gym(db, loc_id, gym.id)
     res = await db.execute(
-        select(GymClassTemplate).where(GymClassTemplate.gym_id == gym.id)
+        select(GymClassTemplate).where(GymClassTemplate.location_id == loc_id)
     )
     return res.scalars().all()
 
 
-@router.patch("/mine/templates/{tmpl_id}", response_model=ClassTemplatePublic)
+@router.patch("/mine/locations/{loc_id}/templates/{tmpl_id}", response_model=ClassTemplatePublic)
 async def update_template(
+    loc_id: int,
     tmpl_id: int,
     body: ClassTemplateUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
         raise HTTPException(status_code=404, detail="Gimnasio no encontrado")
+    await _get_location_of_gym(db, loc_id, gym.id)
     res = await db.execute(
         select(GymClassTemplate).where(
             GymClassTemplate.id == tmpl_id,
-            GymClassTemplate.gym_id == gym.id,
+            GymClassTemplate.location_id == loc_id,
         )
     )
     tmpl = res.scalar_one_or_none()
@@ -476,42 +481,35 @@ async def update_template(
     return tmpl
 
 
-# ─── Gym owner: schedules ─────────────────────────────────────────────────────
+# ─── Gym owner: location-scoped schedules ────────────────────────────────────
 
-@router.post("/mine/schedules", response_model=SchedulePublic, status_code=201)
+@router.post("/mine/locations/{loc_id}/schedules", response_model=SchedulePublic, status_code=201)
 async def create_schedule(
+    loc_id: int,
     body: ScheduleCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
-        raise HTTPException(status_code=404, detail="Crea tu gimnasio primero")
-    # Verify template and location belong to this gym
+        raise HTTPException(status_code=404, detail="Gimnasio no encontrado")
+    loc = await _get_location_of_gym(db, loc_id, gym.id)
+    # Verify template belongs to this location
     tmpl_res = await db.execute(
         select(GymClassTemplate).where(
             GymClassTemplate.id == body.template_id,
-            GymClassTemplate.gym_id == gym.id,
+            GymClassTemplate.location_id == loc.id,
         )
     )
     if not tmpl_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Plantilla no encontrada")
-    loc_res = await db.execute(
-        select(GymLocation).where(
-            GymLocation.id == body.location_id,
-            GymLocation.gym_id == gym.id,
-        )
-    )
-    if not loc_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Sede no encontrada")
-
-    sched = GymClassSchedule(**body.model_dump())
+    body_data = body.model_dump()
+    body_data["location_id"] = loc.id
+    sched = GymClassSchedule(**body_data)
     db.add(sched)
     await db.flush()
-
-    # Reload with relationships
     res = await db.execute(
         select(GymClassSchedule)
         .where(GymClassSchedule.id == sched.id)
@@ -525,25 +523,25 @@ async def create_schedule(
     return await _enrich_schedule(db, sched)
 
 
-@router.get("/mine/schedules", response_model=list[SchedulePublic])
-async def list_my_schedules(
+@router.get("/mine/locations/{loc_id}/schedules", response_model=list[SchedulePublic])
+async def list_location_schedules(
+    loc_id: int,
     from_dt: datetime | None = Query(None),
     to_dt: datetime | None = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
         return []
-
+    await _get_location_of_gym(db, loc_id, gym.id)
     now = datetime.now(timezone.utc)
     q = (
         select(GymClassSchedule)
-        .join(GymClassSchedule.template)
         .where(
-            GymClassTemplate.gym_id == gym.id,
+            GymClassSchedule.location_id == loc_id,
             GymClassSchedule.starts_at >= (from_dt or now),
         )
         .options(
@@ -575,7 +573,8 @@ async def update_schedule(
     res = await db.execute(
         select(GymClassSchedule)
         .join(GymClassSchedule.template)
-        .where(GymClassSchedule.id == sched_id, GymClassTemplate.gym_id == gym.id)
+        .join(GymClassTemplate.location)
+        .where(GymClassSchedule.id == sched_id, GymLocation.gym_id == gym.id)
         .options(
             selectinload(GymClassSchedule.template),
             selectinload(GymClassSchedule.location).selectinload(GymLocation.gym),
@@ -591,22 +590,23 @@ async def update_schedule(
     return await _enrich_schedule(db, sched)
 
 
-# ─── Gym owner: members ───────────────────────────────────────────────────────
+# ─── Gym owner: location-scoped members ──────────────────────────────────────
 
-@router.get("/mine/members", response_model=list[MemberPublic])
-async def list_members(
+@router.get("/mine/locations/{loc_id}/members", response_model=list[MemberPublic])
+async def list_location_members(
+    loc_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
         return []
-
+    await _get_location_of_gym(db, loc_id, gym.id)
     res = await db.execute(
         select(GymMembership)
-        .where(GymMembership.gym_id == gym.id)
+        .where(GymMembership.location_id == loc_id)
         .options(
             selectinload(GymMembership.user),
             selectinload(GymMembership.plan),
@@ -633,21 +633,23 @@ async def list_members(
     return out
 
 
-@router.post("/mine/members/{membership_id}/cancel")
+@router.post("/mine/locations/{loc_id}/members/{membership_id}/cancel")
 async def owner_cancel_membership(
+    loc_id: int,
     membership_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
         raise HTTPException(status_code=404, detail="Gimnasio no encontrado")
+    await _get_location_of_gym(db, loc_id, gym.id)
     res = await db.execute(
         select(GymMembership).where(
             GymMembership.id == membership_id,
-            GymMembership.gym_id == gym.id,
+            GymMembership.location_id == loc_id,
         )
     )
     m = res.scalar_one_or_none()
@@ -661,21 +663,23 @@ async def owner_cancel_membership(
     return {"ok": True}
 
 
-@router.get("/mine/members/{user_id}/ticket-purchases", response_model=list[TicketPurchasePublic])
+@router.get("/mine/locations/{loc_id}/members/{user_id}/ticket-purchases", response_model=list[TicketPurchasePublic])
 async def member_ticket_purchases(
+    loc_id: int,
     user_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     _require_gym_owner(current_user)
-    result = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
-    gym = result.scalar_one_or_none()
+    gym_res = await db.execute(select(Gym).where(Gym.owner_id == current_user.id))
+    gym = gym_res.scalar_one_or_none()
     if not gym:
         return []
+    await _get_location_of_gym(db, loc_id, gym.id)
 
     plans_res = await db.execute(
         select(GymSubscriptionPlan).where(
-            GymSubscriptionPlan.gym_id == gym.id,
+            GymSubscriptionPlan.location_id == loc_id,
             GymSubscriptionPlan.plan_type == PlanType.TICKETS,
         )
     )
@@ -768,8 +772,9 @@ async def get_analytics(
     classes_res = await db.execute(
         select(func.count(GymClassSchedule.id))
         .join(GymClassSchedule.template)
+        .join(GymClassTemplate.location)
         .where(
-            GymClassTemplate.gym_id == gym.id,
+            GymLocation.gym_id == gym.id,
             GymClassSchedule.starts_at >= month_start,
             GymClassSchedule.is_cancelled == False,
         )
@@ -780,8 +785,9 @@ async def get_analytics(
         select(func.count(ClassBooking.id))
         .join(ClassBooking.schedule)
         .join(GymClassSchedule.template)
+        .join(GymClassTemplate.location)
         .where(
-            GymClassTemplate.gym_id == gym.id,
+            GymLocation.gym_id == gym.id,
             GymClassSchedule.starts_at >= month_start,
             ClassBooking.status.in_([BookingStatus.CONFIRMED, BookingStatus.ATTENDED]),
         )
@@ -952,8 +958,10 @@ async def get_gym_plans(
 ):
     await _get_gym_or_404(db, gym_id)
     result = await db.execute(
-        select(GymSubscriptionPlan).where(
-            GymSubscriptionPlan.gym_id == gym_id,
+        select(GymSubscriptionPlan)
+        .join(GymSubscriptionPlan.location)
+        .where(
+            GymLocation.gym_id == gym_id,
             GymSubscriptionPlan.is_active == True,
         )
     )
@@ -1000,7 +1008,7 @@ async def _ensure_schedules_from_slots(db: AsyncSession, gym_id: int, now: datet
         return
 
     tmpl_res = await db.execute(
-        select(GymClassTemplate).where(GymClassTemplate.gym_id == gym_id)
+        select(GymClassTemplate).where(GymClassTemplate.location_id == location.id)
     )
     templates: dict[str, GymClassTemplate] = {t.name: t for t in tmpl_res.scalars().all()}
 
@@ -1016,7 +1024,7 @@ async def _ensure_schedules_from_slots(db: AsyncSession, gym_id: int, now: datet
             h2, m2 = map(int, slot.end_time.split(":"))
             duration = max(1, (h2 * 60 + m2) - (h1 * 60 + m1))
             template = GymClassTemplate(
-                gym_id=gym_id,
+                location_id=location.id,
                 name=slot.name,
                 duration_minutes=duration,
                 max_capacity=slot.capacity,
@@ -1073,9 +1081,9 @@ async def get_gym_schedule(
     q = (
         select(GymClassSchedule)
         .join(GymClassSchedule.template)
-        .join(GymClassSchedule.location)
+        .join(GymClassTemplate.location)
         .where(
-            GymClassTemplate.gym_id == gym_id,
+            GymLocation.gym_id == gym_id,
             GymClassSchedule.is_cancelled == False,
             GymClassSchedule.starts_at >= (from_dt or now),
         )
@@ -1107,9 +1115,11 @@ async def subscribe(
     gym = await _get_gym_or_404(db, gym_id)
 
     plan_res = await db.execute(
-        select(GymSubscriptionPlan).where(
+        select(GymSubscriptionPlan)
+        .join(GymSubscriptionPlan.location)
+        .where(
             GymSubscriptionPlan.id == plan_id,
-            GymSubscriptionPlan.gym_id == gym_id,
+            GymLocation.gym_id == gym_id,
             GymSubscriptionPlan.is_active == True,
         )
     )
@@ -1156,6 +1166,7 @@ async def subscribe(
                 existing.status = MembershipStatus.CANCELLED
             membership = GymMembership(
                 gym_id=gym_id,
+                location_id=plan.location_id,
                 user_id=current_user.id,
                 plan_id=plan_id,
                 status=MembershipStatus.ACTIVE,
@@ -1192,6 +1203,7 @@ async def subscribe(
     expires = now + timedelta(days=30 if plan.plan_type == PlanType.MONTHLY else 365)
     membership = GymMembership(
         gym_id=gym_id,
+        location_id=plan.location_id,
         user_id=current_user.id,
         plan_id=plan_id,
         status=MembershipStatus.ACTIVE,
@@ -1555,18 +1567,19 @@ async def cancel_booking(
     if not sched:
         raise HTTPException(status_code=404, detail="Clase no encontrada")
 
-    # Check cancellation window
-    gym_res = await db.execute(
-        select(Gym).where(Gym.id == sched.template.gym_id)
+    # Check cancellation window using location's cancellation_hours
+    loc_res = await db.execute(
+        select(GymLocation).where(GymLocation.id == sched.location_id)
     )
-    gym = gym_res.scalar_one_or_none()
+    loc = loc_res.scalar_one_or_none()
+    cancellation_hours = loc.cancellation_hours if loc else 2
 
     now = datetime.now(timezone.utc)
-    cancel_deadline = sched.starts_at - timedelta(hours=gym.cancellation_hours if gym else 2)
+    cancel_deadline = sched.starts_at - timedelta(hours=cancellation_hours)
     if now > cancel_deadline:
         raise HTTPException(
             status_code=400,
-            detail=f"No se puede cancelar con menos de {gym.cancellation_hours if gym else 2}h de antelación",
+            detail=f"No se puede cancelar con menos de {cancellation_hours}h de antelación",
         )
 
     res = await db.execute(
@@ -1856,7 +1869,8 @@ async def _get_owner_schedule(db: AsyncSession, sched_id: int, gym_id: int) -> G
     res = await db.execute(
         select(GymClassSchedule)
         .join(GymClassSchedule.template)
-        .where(GymClassSchedule.id == sched_id, GymClassTemplate.gym_id == gym_id)
+        .join(GymClassTemplate.location)
+        .where(GymClassSchedule.id == sched_id, GymLocation.gym_id == gym_id)
         .options(
             selectinload(GymClassSchedule.workout).selectinload(GymClassWorkout.blocks).selectinload(GymClassWorkoutBlock.exercises).selectinload(GymClassWorkoutExercise.exercise),
         )
@@ -1899,7 +1913,8 @@ async def ws_live_class(
             sched_check = await db.execute(
                 select(GymClassSchedule)
                 .join(GymClassSchedule.template)
-                .where(GymClassSchedule.id == sched_id, GymClassTemplate.gym_id == gym.id)
+                .join(GymClassTemplate.location)
+                .where(GymClassSchedule.id == sched_id, GymLocation.gym_id == gym.id)
             )
             if not sched_check.scalar_one_or_none():
                 await websocket.close(code=4003)

@@ -8,7 +8,8 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.user import User
+from app.models.gym import Gym
+from app.models.user import User, UserRole
 from app.schemas.user import AuthResponse, TokenResponse, UserRegister, UserResponse
 
 
@@ -26,6 +27,12 @@ async def register_user(db: AsyncSession, data: UserRegister) -> AuthResponse:
     )
     db.add(user)
     await db.flush()
+
+    if data.role == UserRole.GYM:
+        gym = Gym(owner_id=user.id, name=data.name)
+        db.add(gym)
+        await db.flush()
+
     await db.refresh(user)
 
     tokens = _create_tokens(user.id)

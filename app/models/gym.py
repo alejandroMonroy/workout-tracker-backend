@@ -63,7 +63,6 @@ class Gym(Base):
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     website: Mapped[str | None] = mapped_column(String(300), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    cancellation_hours: Mapped[int] = mapped_column(Integer, default=2)
     free_trial_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -71,12 +70,6 @@ class Gym(Base):
 
     owner: Mapped["User"] = relationship(foreign_keys=[owner_id])  # noqa: F821
     locations: Mapped[list["GymLocation"]] = relationship(
-        back_populates="gym", cascade="all, delete-orphan"
-    )
-    plans: Mapped[list["GymSubscriptionPlan"]] = relationship(
-        back_populates="gym", cascade="all, delete-orphan"
-    )
-    class_templates: Mapped[list["GymClassTemplate"]] = relationship(
         back_populates="gym", cascade="all, delete-orphan"
     )
     memberships: Mapped[list["GymMembership"]] = relationship(
@@ -99,6 +92,7 @@ class GymLocation(Base):
     address: Mapped[str | None] = mapped_column(String(300), nullable=True)
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     capacity: Mapped[int] = mapped_column(Integer, default=20)
+    cancellation_hours: Mapped[int] = mapped_column(Integer, default=2)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -108,13 +102,19 @@ class GymLocation(Base):
     schedules: Mapped[list["GymClassSchedule"]] = relationship(
         back_populates="location", cascade="all, delete-orphan"
     )
+    plans: Mapped[list["GymSubscriptionPlan"]] = relationship(
+        back_populates="location", cascade="all, delete-orphan"
+    )
+    class_templates: Mapped[list["GymClassTemplate"]] = relationship(
+        back_populates="location", cascade="all, delete-orphan"
+    )
 
 
 class GymSubscriptionPlan(Base):
     __tablename__ = "gym_subscription_plans"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    gym_id: Mapped[int] = mapped_column(ForeignKey("gyms.id", ondelete="CASCADE"))
+    location_id: Mapped[int] = mapped_column(ForeignKey("gym_locations.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
     plan_type: Mapped[PlanType] = mapped_column(
         Enum(PlanType, values_callable=lambda x: [e.value for e in x])
@@ -127,7 +127,7 @@ class GymSubscriptionPlan(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    gym: Mapped["Gym"] = relationship(back_populates="plans")
+    location: Mapped["GymLocation"] = relationship(back_populates="plans")
     memberships: Mapped[list["GymMembership"]] = relationship(
         back_populates="plan"
     )
@@ -138,6 +138,7 @@ class GymMembership(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     gym_id: Mapped[int] = mapped_column(ForeignKey("gyms.id", ondelete="CASCADE"))
+    location_id: Mapped[int | None] = mapped_column(ForeignKey("gym_locations.id", ondelete="SET NULL"), nullable=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     plan_id: Mapped[int | None] = mapped_column(
         ForeignKey("gym_subscription_plans.id", ondelete="SET NULL"), nullable=True
@@ -163,6 +164,7 @@ class GymMembership(Base):
     )
 
     gym: Mapped["Gym"] = relationship(back_populates="memberships")
+    location: Mapped["GymLocation | None"] = relationship(foreign_keys=[location_id])
     user: Mapped["User"] = relationship(foreign_keys=[user_id])  # noqa: F821
     plan: Mapped["GymSubscriptionPlan | None"] = relationship(back_populates="memberships")
 
@@ -171,7 +173,7 @@ class GymClassTemplate(Base):
     __tablename__ = "gym_class_templates"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    gym_id: Mapped[int] = mapped_column(ForeignKey("gyms.id", ondelete="CASCADE"))
+    location_id: Mapped[int] = mapped_column(ForeignKey("gym_locations.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_minutes: Mapped[int] = mapped_column(Integer, default=60)
@@ -181,7 +183,7 @@ class GymClassTemplate(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    gym: Mapped["Gym"] = relationship(back_populates="class_templates")
+    location: Mapped["GymLocation"] = relationship(back_populates="class_templates")
     schedules: Mapped[list["GymClassSchedule"]] = relationship(
         back_populates="template", cascade="all, delete-orphan"
     )
