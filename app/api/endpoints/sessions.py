@@ -10,8 +10,10 @@ from app.core.dependencies import get_current_user
 from app.models.exercise import Exercise
 from app.models.record import PersonalRecord, RecordType
 from app.models.session import SessionSet, WorkoutSession
+from app.models.template import TemplateBlock, WorkoutTemplate
 from app.models.user import User
 from app.models.xp import XPTransaction, level_from_xp
+from app.models.message import CoachMessage
 from app.schemas.session import (
     SessionCreate,
     SessionFinish,
@@ -19,6 +21,7 @@ from app.schemas.session import (
     SessionResponse,
     SessionSetCreate,
     SessionSetResponse,
+    SessionSummaryResponse,
 )
 from app.services.xp import award_session_xp
 
@@ -79,14 +82,24 @@ async def list_sessions(
 
         session_data = SessionListResponse.model_validate(session)
         session_data.set_count = set_count
-        session_data.exercise_count = exercise_count
         session_data.has_records = has_records
+        if session.template_id:
+            tmpl = await db.get(WorkoutTemplate, session.template_id)
+            session_data.template_name = tmpl.name if tmpl else None
+            if exercise_count == 0:
+                block_count_result = await db.execute(
+                    select(func.count(TemplateBlock.id)).where(
+                        TemplateBlock.template_id == session.template_id
+                    )
+                )
+                exercise_count = block_count_result.scalar_one()
+        session_data.exercise_count = exercise_count
         response.append(session_data)
 
     return response
 
 
-@router.get("/{session_id}", response_model=SessionResponse)
+@router.get("/{session_id}", response_model=SessionSummaryResponse)
 async def get_session(
     session_id: int,
     current_user: User = Depends(get_current_user),
@@ -103,7 +116,48 @@ async def get_session(
     session = result.scalar_one_or_none()
     if not session:
         raise HTTPException(status_code=404, detail="Sesión no encontrada")
-    return session
+
+    summary = SessionSummaryResponse.model_validate(session)
+
+    if session.finished_at:
+        # XP earned for this session
+        xp_result = await db.execute(
+            select(func.coalesce(func.sum(XPTransaction.amount), 0)).where(
+                XPTransaction.session_id == session.id,
+                XPTransaction.user_id == current_user.id,
+                XPTransaction.amount > 0,
+            )
+        )
+        summary.xp_earned = xp_result.scalar_one()
+
+        # PR count for this session
+        pr_result = await db.execute(
+            select(func.count(PersonalRecord.id)).where(
+                PersonalRecord.session_id == session.id,
+                PersonalRecord.user_id == current_user.id,
+            )
+        )
+        summary.pr_count = pr_result.scalar_one()
+
+        # Total volume
+        summary.total_volume_kg = sum(
+            (s.reps or 0) * (s.weight_kg or 0.0) for s in session.sets
+        )
+
+        # Coach message
+        msg_result = await db.execute(
+            select(CoachMessage)
+            .options(selectinload(CoachMessage.coach))
+            .where(CoachMessage.session_id == session.id)
+            .order_by(CoachMessage.sent_at.desc())
+            .limit(1)
+        )
+        coach_msg = msg_result.scalar_one_or_none()
+        if coach_msg:
+            summary.coach_message = coach_msg.body
+            summary.coach_name = coach_msg.coach.name
+
+    return summary
 
 
 @router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
@@ -268,7 +322,7 @@ async def delete_session(
     await db.flush()
 
 
-@router.patch("/{session_id}/finish", response_model=SessionResponse)
+@router.patch("/{session_id}/finish", response_model=SessionSummaryResponse)
 async def finish_session(
     session_id: int,
     data: SessionFinish,
@@ -291,7 +345,7 @@ async def finish_session(
 
     now = datetime.now(timezone.utc)
     session.finished_at = now
-    session.total_duration_sec = int((now - session.started_at).total_seconds())
+    session.total_duration_sec = data.duration_sec if data.duration_sec is not None else int((now - session.started_at).total_seconds())
     if data.notes is not None:
         session.notes = data.notes
     if data.rpe is not None:
@@ -303,11 +357,48 @@ async def finish_session(
     new_records = await _detect_personal_records(db, session, current_user.id)
 
     # Award XP
-    await award_session_xp(db, session, current_user.id, new_pr_count=len(new_records))
+    xp_transactions = await award_session_xp(db, session, current_user.id, new_pr_count=len(new_records))
+    xp_earned = sum(tx.amount for tx in xp_transactions)
+
+    # Total volume lifted (reps * weight_kg across all sets)
+    total_volume_kg = sum(
+        (s.reps or 0) * (s.weight_kg or 0.0)
+        for s in session.sets
+    )
+
+    # Coach message for this session (most recent)
+    coach_message_body: str | None = None
+    coach_name: str | None = None
+    msg_result = await db.execute(
+        select(CoachMessage)
+        .options(selectinload(CoachMessage.coach))
+        .where(CoachMessage.session_id == session.id)
+        .order_by(CoachMessage.sent_at.desc())
+        .limit(1)
+    )
+    coach_msg = msg_result.scalar_one_or_none()
+    if coach_msg:
+        coach_message_body = coach_msg.body
+        coach_name = coach_msg.coach.name
 
     await db.flush()
-    await db.refresh(session)
-    return session
+
+    # Reload session with relationships to avoid expired lazy-loads after flush
+    reloaded = await db.execute(
+        select(WorkoutSession)
+        .options(selectinload(WorkoutSession.sets).selectinload(SessionSet.exercise))
+        .where(WorkoutSession.id == session_id)
+        .execution_options(populate_existing=True)
+    )
+    session = reloaded.scalar_one()
+
+    summary = SessionSummaryResponse.model_validate(session)
+    summary.xp_earned = xp_earned
+    summary.pr_count = len(new_records)
+    summary.total_volume_kg = total_volume_kg
+    summary.coach_message = coach_message_body
+    summary.coach_name = coach_name
+    return summary
 
 
 async def _detect_personal_records(

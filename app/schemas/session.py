@@ -32,6 +32,7 @@ class SessionFinish(BaseModel):
     notes: str | None = None
     rpe: int | None = Field(None, ge=1, le=10)
     mood: str | None = None
+    duration_sec: int | None = None  # actual timer elapsed, sent by client
 
 
 # --- Response schemas ---
@@ -73,10 +74,19 @@ class SessionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SessionSummaryResponse(SessionResponse):
+    xp_earned: int = 0
+    pr_count: int = 0
+    total_volume_kg: float = 0.0
+    coach_message: str | None = None
+    coach_name: str | None = None
+
+
 class SessionListResponse(BaseModel):
     id: int
     user_id: int
     template_id: int | None = None
+    template_name: str | None = None
     class_schedule_id: int | None = None
     session_type: SessionType = SessionType.MANUAL
     started_at: datetime
